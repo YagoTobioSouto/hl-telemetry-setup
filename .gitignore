@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# CDK build output
+infra/cdk.out/
+
+# TypeScript compiled output
+infra/dist/
+*.js
+*.js.map
+*.d.ts
+!infra/bin/*.js
+
+# CDK context (auto-generated, optional to commit)
+# cdk.context.json
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.*
