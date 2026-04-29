@@ -97,7 +97,8 @@
                 "hero": "#/$defs/HeroBlock",
                 "liquid_macro": "#/$defs/LiquidMacroBlock",
                 "paragraph": "#/$defs/ParagraphBlock",
-                "spacer": "#/$defs/SpacerBlock"
+                "spacer": "#/$defs/SpacerBlock",
+                "table": "#/$defs/TableBlock"
               },
               "propertyName": "type"
             },
@@ -128,6 +129,9 @@
               },
               {
                 "$ref": "#/$defs/SpacerBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
               },
               {
                 "$ref": "#/$defs/LiquidMacroBlock"
@@ -180,7 +184,7 @@
     },
     "CtaBlock": {
       "additionalProperties": false,
-      "description": "Single CTA button. Renderer applies brand.urlFilter to href at export.",
+      "description": "Single CTA button. Renderer applies brand.urlFilter to href at export.\n\nNote: `href` is a str rather than HttpUrl because hrefs may contain inline\nLiquid expressions for dynamic substitution (e.g. user_id passed to an\nexternal survey URL: `https://surveymonkey.com/?uid={{${user_id}}}`).\nValidation of the rendered URL is the renderer's responsibility.",
       "properties": {
         "id": {
           "description": "Unique block ID within the draft.",
@@ -199,9 +203,7 @@
           "type": "string"
         },
         "href": {
-          "format": "uri",
-          "maxLength": 2083,
-          "minLength": 1,
+          "description": "URL or URL template. May contain Liquid expressions like {{${user_id}}}.",
           "title": "Href",
           "type": "string"
         }
@@ -314,6 +316,19 @@
           ],
           "default": null,
           "title": "Tone"
+        },
+        "tracking_lid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-campaign tracking ID baked into URL filters at render time. Stable across persona variants of the same campaign. M2: moves to a dedicated Campaign entity.",
+          "title": "Tracking Lid"
         }
       },
       "required": [
@@ -582,6 +597,64 @@
       ],
       "title": "SpacerBlock",
       "type": "object"
+    },
+    "TableBlock": {
+      "additionalProperties": false,
+      "description": "Structured tabular data \u2014 rate tables, comparison tables, fee schedules.\n\nUse for first-class tabular content where rows and columns carry semantic\nmeaning. The renderer produces email-safe table-in-table HTML for Outlook\ncompatibility. Each row is independently annotatable for compliance review.\n\nFor non-tabular structured content (lists, comparisons), use ParagraphBlock\nor ColumnLayoutBlock instead.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "table",
+          "default": "table",
+          "title": "Type",
+          "type": "string"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional caption rendered above the table.",
+          "title": "Caption"
+        },
+        "headers": {
+          "description": "Column headers.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Headers",
+          "type": "array"
+        },
+        "rows": {
+          "description": "Row data. Each row's length must equal len(headers).",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "headers",
+        "rows"
+      ],
+      "title": "TableBlock",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -642,7 +715,8 @@
             "hero": "#/$defs/HeroBlock",
             "liquid_macro": "#/$defs/LiquidMacroBlock",
             "paragraph": "#/$defs/ParagraphBlock",
-            "spacer": "#/$defs/SpacerBlock"
+            "spacer": "#/$defs/SpacerBlock",
+            "table": "#/$defs/TableBlock"
           },
           "propertyName": "type"
         },
@@ -673,6 +747,9 @@
           },
           {
             "$ref": "#/$defs/SpacerBlock"
+          },
+          {
+            "$ref": "#/$defs/TableBlock"
           },
           {
             "$ref": "#/$defs/LiquidMacroBlock"

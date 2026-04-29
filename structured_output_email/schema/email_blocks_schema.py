@@ -23,8 +23,11 @@ Strands integration:
 """
 
 from __future__ import annotations
+
 from typing import Annotated, List, Literal, Optional, Union
+
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
 
 # ---------------------------------------------------------------------------
 # Block types (authored)
@@ -85,11 +88,20 @@ class ParagraphBlock(BlockBase):
 
 
 class CtaBlock(BlockBase):
-    """Single CTA button. Renderer applies brand.urlFilter to href at export."""
+    """
+    Single CTA button. Renderer applies brand.urlFilter to href at export.
+
+    Note: `href` is a str rather than HttpUrl because hrefs may contain inline
+    Liquid expressions for dynamic substitution (e.g. user_id passed to an
+    external survey URL: `https://surveymonkey.com/?uid={{${user_id}}}`).
+    Validation of the rendered URL is the renderer's responsibility.
+    """
 
     type: Literal["cta"] = "cta"
     label: str
-    href: HttpUrl
+    href: str = Field(
+        description="URL or URL template. May contain Liquid expressions like {{${user_id}}}."
+    )
 
 
 class FeatureRowBlock(BlockBase):
@@ -105,7 +117,7 @@ class ColumnDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     width_pct: int = Field(ge=10, le=90)
-    blocks: List["ColumnContentBlock"]
+    blocks: List["AuthoredBlock"]
 
 
 class ColumnLayoutBlock(BlockBase):
@@ -136,6 +148,40 @@ class SpacerBlock(BlockBase):
     height: int = Field(ge=4, le=120, description="Pixel height.")
 
 
+class TableBlock(BlockBase):
+    """
+    Structured tabular data — rate tables, comparison tables, fee schedules.
+
+    Use for first-class tabular content where rows and columns carry semantic
+    meaning. The renderer produces email-safe table-in-table HTML for Outlook
+    compatibility. Each row is independently annotatable for compliance review.
+
+    For non-tabular structured content (lists, comparisons), use ParagraphBlock
+    or ColumnLayoutBlock instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["table"] = "table"
+    caption: Optional[str] = Field(
+        default=None,
+        description="Optional caption rendered above the table.",
+    )
+    headers: List[str] = Field(min_length=1, description="Column headers.")
+    rows: List[List[str]] = Field(
+        description="Row data. Each row's length must equal len(headers)."
+    )
+
+    def model_post_init(self, __context) -> None:
+        # Enforce row width matches header width
+        expected = len(self.headers)
+        for i, row in enumerate(self.rows):
+            if len(row) != expected:
+                raise ValueError(
+                    f"row {i} has {len(row)} cells; expected {expected} (matching headers)"
+                )
+
+
 class LiquidMacroBlock(BlockBase):
     """
     Opaque Liquid expression resolved at send time.
@@ -153,20 +199,8 @@ class LiquidMacroBlock(BlockBase):
 
 
 # ---------------------------------------------------------------------------
-# Discriminated unions
+# Discriminated union
 # ---------------------------------------------------------------------------
-#
-# Two unions are defined:
-#
-#   AuthoredBlock        — top-level blocks in EmailDraft.blocks.
-#   ColumnContentBlock   — blocks legal *inside* a ColumnDefinition.
-#
-# ColumnContentBlock deliberately excludes ColumnLayoutBlock to break the
-# schema cycle (Strands' JSON-Schema-to-tool-spec converter cannot yet walk
-# $ref cycles — see strands/tools/structured_output/structured_output_utils.py).
-# This is also a desirable invariant: nested column layouts render poorly in
-# email clients (especially Outlook), so "no columns in columns" is a good
-# constraint regardless.
 
 AuthoredBlock = Annotated[
     Union[
@@ -179,21 +213,7 @@ AuthoredBlock = Annotated[
         DisclaimerBlock,
         DividerBlock,
         SpacerBlock,
-        LiquidMacroBlock,
-    ],
-    Field(discriminator="type"),
-]
-
-ColumnContentBlock = Annotated[
-    Union[
-        HeroBlock,
-        HeadingBlock,
-        ParagraphBlock,
-        CtaBlock,
-        FeatureRowBlock,
-        DisclaimerBlock,
-        DividerBlock,
-        SpacerBlock,
+        TableBlock,
         LiquidMacroBlock,
     ],
     Field(discriminator="type"),
@@ -209,9 +229,7 @@ class Annotation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    block_id: str = Field(
-        description="Module-scoped: refs a block.id within this draft."
-    )
+    block_id: str = Field(description="Module-scoped: refs a block.id within this draft.")
     source: Literal["editor", "fin_prams", "compliance"]
     severity: Literal["advisory", "med", "high"]
     tag: str = Field(
@@ -238,6 +256,14 @@ class DraftMetadata(BaseModel):
     word_count: int = Field(ge=0)
     reading_age: Optional[float] = None
     tone: Optional[str] = None
+    tracking_lid: Optional[str] = Field(
+        default=None,
+        description=(
+            "Per-campaign tracking ID baked into URL filters at render time. "
+            "Stable across persona variants of the same campaign. "
+            "M2: moves to a dedicated Campaign entity."
+        ),
+    )
 
 
 class EmailDraft(BaseModel):
