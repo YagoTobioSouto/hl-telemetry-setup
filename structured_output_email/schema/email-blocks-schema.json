@@ -1,0 +1,710 @@
+{
+  "$defs": {
+    "Annotation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "block_id": {
+          "description": "Module-scoped: refs a block.id within this draft.",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "editor",
+            "fin_prams",
+            "compliance"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "advisory",
+            "med",
+            "high"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "tag": {
+          "description": "Categorisation tag, e.g. 'clarity', 'tone', 'compliance', 'accuracy'.",
+          "title": "Tag",
+          "type": "string"
+        },
+        "text": {
+          "description": "The issue identified.",
+          "title": "Text",
+          "type": "string"
+        },
+        "suggestion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Proposed rewrite or remediation.",
+          "title": "Suggestion"
+        },
+        "status": {
+          "default": "open",
+          "enum": [
+            "open",
+            "accepted",
+            "dismissed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "block_id",
+        "source",
+        "severity",
+        "tag",
+        "text"
+      ],
+      "title": "Annotation",
+      "type": "object"
+    },
+    "ColumnDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "width_pct": {
+          "maximum": 90,
+          "minimum": 10,
+          "title": "Width Pct",
+          "type": "integer"
+        },
+        "blocks": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "column_layout": "#/$defs/ColumnLayoutBlock",
+                "cta": "#/$defs/CtaBlock",
+                "disclaimer": "#/$defs/DisclaimerBlock",
+                "divider": "#/$defs/DividerBlock",
+                "feature_row": "#/$defs/FeatureRowBlock",
+                "heading": "#/$defs/HeadingBlock",
+                "hero": "#/$defs/HeroBlock",
+                "liquid_macro": "#/$defs/LiquidMacroBlock",
+                "paragraph": "#/$defs/ParagraphBlock",
+                "spacer": "#/$defs/SpacerBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/HeroBlock"
+              },
+              {
+                "$ref": "#/$defs/HeadingBlock"
+              },
+              {
+                "$ref": "#/$defs/ParagraphBlock"
+              },
+              {
+                "$ref": "#/$defs/CtaBlock"
+              },
+              {
+                "$ref": "#/$defs/FeatureRowBlock"
+              },
+              {
+                "$ref": "#/$defs/ColumnLayoutBlock"
+              },
+              {
+                "$ref": "#/$defs/DisclaimerBlock"
+              },
+              {
+                "$ref": "#/$defs/DividerBlock"
+              },
+              {
+                "$ref": "#/$defs/SpacerBlock"
+              },
+              {
+                "$ref": "#/$defs/LiquidMacroBlock"
+              }
+            ]
+          },
+          "title": "Blocks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "width_pct",
+        "blocks"
+      ],
+      "title": "ColumnDefinition",
+      "type": "object"
+    },
+    "ColumnLayoutBlock": {
+      "additionalProperties": false,
+      "description": "Generic column layout \u2014 for app/social rows, side-by-side comparisons.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "column_layout",
+          "default": "column_layout",
+          "title": "Type",
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ColumnDefinition"
+          },
+          "maxItems": 3,
+          "minItems": 2,
+          "title": "Columns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "columns"
+      ],
+      "title": "ColumnLayoutBlock",
+      "type": "object"
+    },
+    "CtaBlock": {
+      "additionalProperties": false,
+      "description": "Single CTA button. Renderer applies brand.urlFilter to href at export.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "cta",
+          "default": "cta",
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "href": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Href",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "href"
+      ],
+      "title": "CtaBlock",
+      "type": "object"
+    },
+    "DisclaimerBlock": {
+      "additionalProperties": false,
+      "description": "Regulatory body text (campaign-specific, distinct from brand_footer).",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "disclaimer",
+          "default": "disclaimer",
+          "title": "Type",
+          "type": "string"
+        },
+        "html": {
+          "title": "Html",
+          "type": "string"
+        },
+        "variant": {
+          "default": "small_print",
+          "enum": [
+            "standard",
+            "small_print"
+          ],
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "html"
+      ],
+      "title": "DisclaimerBlock",
+      "type": "object"
+    },
+    "DividerBlock": {
+      "additionalProperties": false,
+      "description": "Visual rule.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "divider",
+          "default": "divider",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "DividerBlock",
+      "type": "object"
+    },
+    "DraftMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "pass": {
+          "minimum": 1,
+          "title": "Pass",
+          "type": "integer"
+        },
+        "converged": {
+          "title": "Converged",
+          "type": "boolean"
+        },
+        "word_count": {
+          "minimum": 0,
+          "title": "Word Count",
+          "type": "integer"
+        },
+        "reading_age": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reading Age"
+        },
+        "tone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tone"
+        }
+      },
+      "required": [
+        "pass",
+        "converged",
+        "word_count"
+      ],
+      "title": "DraftMetadata",
+      "type": "object"
+    },
+    "FeatureRowBlock": {
+      "additionalProperties": false,
+      "description": "Icon (44px typical) + heading + body. Repeated horizontally is common.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "feature_row",
+          "default": "feature_row",
+          "title": "Type",
+          "type": "string"
+        },
+        "icon_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Icon Url",
+          "type": "string"
+        },
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "icon_url",
+        "heading",
+        "body"
+      ],
+      "title": "FeatureRowBlock",
+      "type": "object"
+    },
+    "HeadingBlock": {
+      "additionalProperties": false,
+      "description": "Heading element. Multiple consecutive headings are allowed.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "heading",
+          "default": "heading",
+          "title": "Type",
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "h1",
+            "h2",
+            "h3"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "align": {
+          "anyOf": [
+            {
+              "enum": [
+                "left",
+                "center"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default is brand-driven when omitted.",
+          "title": "Align"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "text"
+      ],
+      "title": "HeadingBlock",
+      "type": "object"
+    },
+    "HeroBlock": {
+      "additionalProperties": false,
+      "description": "References a brand-scoped HeroTemplate (pre-baked image asset).",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "hero",
+          "default": "hero",
+          "title": "Type",
+          "type": "string"
+        },
+        "template_id": {
+          "description": "Refs HeroTemplate in brand's hero library.",
+          "title": "Template Id",
+          "type": "string"
+        },
+        "slot_values": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For templates with editable text overlays.",
+          "title": "Slot Values"
+        },
+        "alt_override": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override the template's default alt text.",
+          "title": "Alt Override"
+        }
+      },
+      "required": [
+        "id",
+        "template_id"
+      ],
+      "title": "HeroBlock",
+      "type": "object"
+    },
+    "LiquidMacroBlock": {
+      "additionalProperties": false,
+      "description": "Opaque Liquid expression resolved at send time.\n\nExamples:\n    {{ ${email_footer} }}        \u2014 HL's centrally stored regulatory footer\n    {% include 'unsubscribe' %}\n\nRenders as a labelled placeholder in the editor; raw Liquid at export.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "liquid_macro",
+          "default": "liquid_macro",
+          "title": "Type",
+          "type": "string"
+        },
+        "expression": {
+          "description": "Raw Liquid expression.",
+          "title": "Expression",
+          "type": "string"
+        },
+        "preview_label": {
+          "description": "Editor placeholder, e.g. '[Email Footer]'.",
+          "title": "Preview Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "expression",
+        "preview_label"
+      ],
+      "title": "LiquidMacroBlock",
+      "type": "object"
+    },
+    "ParagraphBlock": {
+      "additionalProperties": false,
+      "description": "TipTap-authored rich text serialised as sanitised HTML.\n\nAllowed inline marks: bold, italic, link, lists, strong-emphasis pairs.\n\nInline Liquid tags use the form:\n    <span data-liquid-tag=\"<tag_id>\">[Label]</span>\n\nWhere tag_id refers to a LiquidTag in the brand's registry. The inner\ntext is the editor preview label and is replaced with raw Liquid at export.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "default": "paragraph",
+          "title": "Type",
+          "type": "string"
+        },
+        "html": {
+          "description": "Sanitised TipTap HTML output.",
+          "title": "Html",
+          "type": "string"
+        },
+        "variant": {
+          "default": "body",
+          "enum": [
+            "body",
+            "small_print",
+            "footnote"
+          ],
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "html"
+      ],
+      "title": "ParagraphBlock",
+      "type": "object"
+    },
+    "SpacerBlock": {
+      "additionalProperties": false,
+      "description": "Explicit whitespace. Use sparingly; prefer brand-driven block spacing.",
+      "properties": {
+        "id": {
+          "description": "Unique block ID within the draft.",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "spacer",
+          "default": "spacer",
+          "title": "Type",
+          "type": "string"
+        },
+        "height": {
+          "description": "Pixel height.",
+          "maximum": 120,
+          "minimum": 4,
+          "title": "Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "height"
+      ],
+      "title": "SpacerBlock",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The full structured output produced by Strands and consumed by the\nCopycraft editor + renderer.",
+  "properties": {
+    "draft_id": {
+      "title": "Draft Id",
+      "type": "string"
+    },
+    "campaign_id": {
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "brand_id": {
+      "description": "Refs BrandConfig.",
+      "title": "Brand Id",
+      "type": "string"
+    },
+    "email_type": {
+      "description": "e.g. 'isa-deadline', 'gilt-launch'.",
+      "title": "Email Type",
+      "type": "string"
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Persona slug; null = neutral draft (pre-personalisation).",
+      "title": "Persona"
+    },
+    "subject": {
+      "maxLength": 150,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "pre_header": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Pre Header",
+      "type": "string"
+    },
+    "blocks": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "column_layout": "#/$defs/ColumnLayoutBlock",
+            "cta": "#/$defs/CtaBlock",
+            "disclaimer": "#/$defs/DisclaimerBlock",
+            "divider": "#/$defs/DividerBlock",
+            "feature_row": "#/$defs/FeatureRowBlock",
+            "heading": "#/$defs/HeadingBlock",
+            "hero": "#/$defs/HeroBlock",
+            "liquid_macro": "#/$defs/LiquidMacroBlock",
+            "paragraph": "#/$defs/ParagraphBlock",
+            "spacer": "#/$defs/SpacerBlock"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/HeroBlock"
+          },
+          {
+            "$ref": "#/$defs/HeadingBlock"
+          },
+          {
+            "$ref": "#/$defs/ParagraphBlock"
+          },
+          {
+            "$ref": "#/$defs/CtaBlock"
+          },
+          {
+            "$ref": "#/$defs/FeatureRowBlock"
+          },
+          {
+            "$ref": "#/$defs/ColumnLayoutBlock"
+          },
+          {
+            "$ref": "#/$defs/DisclaimerBlock"
+          },
+          {
+            "$ref": "#/$defs/DividerBlock"
+          },
+          {
+            "$ref": "#/$defs/SpacerBlock"
+          },
+          {
+            "$ref": "#/$defs/LiquidMacroBlock"
+          }
+        ]
+      },
+      "title": "Blocks",
+      "type": "array"
+    },
+    "annotations": {
+      "items": {
+        "$ref": "#/$defs/Annotation"
+      },
+      "title": "Annotations",
+      "type": "array"
+    },
+    "metadata": {
+      "$ref": "#/$defs/DraftMetadata"
+    }
+  },
+  "required": [
+    "draft_id",
+    "campaign_id",
+    "brand_id",
+    "email_type",
+    "persona",
+    "subject",
+    "pre_header",
+    "blocks",
+    "annotations",
+    "metadata"
+  ],
+  "title": "EmailDraft",
+  "type": "object"
+}

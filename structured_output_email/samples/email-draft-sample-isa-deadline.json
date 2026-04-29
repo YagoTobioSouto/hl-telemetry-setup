@@ -1,0 +1,88 @@
+{
+  "draft_id": "draft_01HXYZABCDEFG",
+  "campaign_id": "campaign_isa_deadline_2026",
+  "brand_id": "hargreaves-lansdown",
+  "email_type": "isa-deadline",
+  "persona": "ellie",
+  "subject": "Your ISA allowance expires on 5 April",
+  "pre_header": "You have £3,200 left of this year's £20,000 allowance — don't lose it.",
+  "blocks": [
+    {
+      "id": "blk_hero_01",
+      "type": "hero",
+      "template_id": "hl_isa_deadline_banner_v1",
+      "alt_override": "Your tax-free ISA allowance ends in 7 days"
+    },
+    {
+      "id": "blk_heading_01",
+      "type": "heading",
+      "level": "h1",
+      "text": "Your tax-free allowance ends in 7 days",
+      "align": "center"
+    },
+    {
+      "id": "blk_para_salutation",
+      "type": "paragraph",
+      "variant": "body",
+      "html": "<p>Hi <span data-liquid-tag=\"hl_salutation\">[Salutation]</span>,</p><p>You have £3,200 of your £20,000 ISA allowance left for the 2025/26 tax year.</p>"
+    },
+    {
+      "id": "blk_para_deadline",
+      "type": "paragraph",
+      "variant": "body",
+      "html": "<p>Once the deadline passes at midnight on 5 April, you can't carry your unused ISA allowance into the next tax year. It's gone for good.</p>"
+    },
+    {
+      "id": "blk_para_benefit",
+      "type": "paragraph",
+      "variant": "body",
+      "html": "<p>Topping up now means your investments grow free from UK income tax and capital gains tax. The more of your allowance you use, the more you could save in tax over the long term.</p><p>You don't need to choose your investments straight away. Add cash to your ISA today and decide where to invest when you're ready.</p>"
+    },
+    {
+      "id": "blk_cta_topup",
+      "type": "cta",
+      "label": "Top up your ISA",
+      "href": "https://www.hl.co.uk/investment-services/stocks-and-shares-isa/top-up"
+    },
+    {
+      "id": "blk_disclaimer_01",
+      "type": "disclaimer",
+      "variant": "small_print",
+      "html": "<p>This isn't personal advice. If you're not sure what's best for you, please ask us about advice. Tax rules can change and benefits depend on individual circumstances. The value of investments can go down as well as up, and you may get back less than you invest.</p>"
+    },
+    {
+      "id": "blk_liquid_footer",
+      "type": "liquid_macro",
+      "expression": "{{${email_footer}}}",
+      "preview_label": "[HL standard footer — pulled from Braze at send]"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "ann_01",
+      "block_id": "blk_para_benefit",
+      "source": "fin_prams",
+      "severity": "advisory",
+      "tag": "clarity",
+      "text": "\"You could save in tax over the long term\" — overstates certainty of tax savings; depends on personal circumstances.",
+      "suggestion": "Rephrase to: \"How much you save in tax depends on your circumstances and may change in future.\"",
+      "status": "open"
+    },
+    {
+      "id": "ann_02",
+      "block_id": "blk_cta_topup",
+      "source": "editor",
+      "severity": "advisory",
+      "tag": "destination_verified",
+      "text": "CTA URL resolves to live HL ISA top-up page.",
+      "status": "accepted"
+    }
+  ],
+  "metadata": {
+    "pass": 2,
+    "converged": true,
+    "word_count": 169,
+    "reading_age": 12.4,
+    "tone": "action-oriented"
+  }
+}
