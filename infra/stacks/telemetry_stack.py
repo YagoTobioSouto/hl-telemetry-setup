@@ -82,10 +82,11 @@ class TelemetryStack(Stack):
         fn = _lambda.Function(
             self,
             "FeedbackHandler",
+            function_name="copycraft-feedback-handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="handler.lambda_handler",
             code=_lambda.Code.from_asset(lambda_asset_path),
-            environment={"BUCKET_NAME": bucket.bucket_name},
+            environment={"TELEMETRY_BUCKET": bucket.bucket_name},
             timeout=Duration.seconds(10),
             log_retention=logs.RetentionDays.ONE_MONTH,
         )
@@ -106,7 +107,7 @@ class TelemetryStack(Stack):
         api = apigateway.RestApi(
             self,
             "TelemetryApi",
-            rest_api_name="telemetry-api",
+            rest_api_name="copycraft-feedback",
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=apigateway.Cors.ALL_ORIGINS,
                 allow_methods=["POST", "OPTIONS"],

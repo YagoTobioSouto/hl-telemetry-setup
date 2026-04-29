@@ -14,13 +14,17 @@ already granted on the Lambda role.
 """
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 
 import boto3
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 s3 = boto3.client("s3")
-BUCKET = os.environ["BUCKET_NAME"]
+BUCKET = os.environ["TELEMETRY_BUCKET"]
 
 
 def lambda_handler(event, context):
@@ -57,9 +61,13 @@ def lambda_handler(event, context):
         return _response(200, {"status": "ok"})
 
     except KeyError as e:
-        return _response(400, {"error": f"Missing field: {e}"})
-    except Exception as e:
-        return _response(500, {"error": str(e)})
+        # Missing required field — safe to surface the field name.
+        return _response(400, {"error": f"Missing field: {e.args[0]}"})
+    except Exception:
+        # Log the full exception server-side; return a stable, generic
+        # message to the client (contracts.md Error handling table).
+        logger.exception("Feedback handler failed")
+        return _response(500, {"error": "Internal server error"})
 
 
 def _response(status, body):
