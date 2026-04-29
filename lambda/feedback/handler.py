@@ -1,3 +1,18 @@
+"""Feedback handler Lambda.
+
+Single handler that routes both feedback endpoints by ``event["resource"]``:
+
+- ``/api/feedback/edit-decision`` → writes to ``edit-decisions/`` prefix
+- ``/api/feedback/rating``         → writes to ``ratings/`` prefix
+
+Response shape matches contracts.md §2 (``{"status": "ok"}`` on success,
+``{"error": "..."}`` on failure).
+
+PII redaction on ``issueText``, ``suggestionText``, and ``comment`` is
+stubbed (see contract-conflicts.md §7). IAM permission for Comprehend is
+already granted on the Lambda role.
+"""
+
 import json
 import os
 from datetime import datetime, timezone
@@ -8,7 +23,7 @@ s3 = boto3.client("s3")
 BUCKET = os.environ["BUCKET_NAME"]
 
 
-def handler(event, context):
+def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body") or "{}")
         resource = event.get("resource", "")
@@ -18,13 +33,15 @@ def handler(event, context):
         if resource == "/api/feedback/edit-decision":
             session_id = body["sessionId"]
             issue_id = body["issueId"]
-            # TODO: PII redaction on issueText, suggestionText via Comprehend
+            # TODO(contract-conflicts §7): PII redaction on issueText,
+            # suggestionText via Comprehend (IAM already granted).
             body["timestamp"] = now.isoformat()
             key = f"edit-decisions/{partition}/{session_id}_{issue_id}.json"
 
         elif resource == "/api/feedback/rating":
             session_id = body["sessionId"]
-            # TODO: PII redaction on comment via Comprehend
+            # TODO(contract-conflicts §7): PII redaction on comment via
+            # Comprehend (IAM already granted).
             body["timestamp"] = now.isoformat()
             key = f"ratings/{partition}/{session_id}.json"
 
@@ -37,7 +54,7 @@ def handler(event, context):
             Body=json.dumps(body),
             ContentType="application/json",
         )
-        return _response(200, {"message": "ok", "key": key})
+        return _response(200, {"status": "ok"})
 
     except KeyError as e:
         return _response(400, {"error": f"Missing field: {e}"})

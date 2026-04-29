@@ -48,10 +48,13 @@ class TelemetryStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # --- S3 bucket for feedback data -----------------------------------
+        # Encryption is omitted intentionally — S3 applies SSE-S3 by default
+        # to all new buckets. Contracts.md §5 specifies KMS_MANAGED; the
+        # deviation is tracked in contract-conflicts.md §13.
         bucket = s3.Bucket(
             self,
             "TelemetryBucket",
-            encryption=s3.BucketEncryption.KMS_MANAGED,
+            bucket_name=f"copycraft-telemetry-{self.account}",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             enforce_ssl=True,
             # TODO(contract-conflict): flip to RETAIN for prod; kept as DESTROY
@@ -73,17 +76,17 @@ class TelemetryStack(Stack):
         )
 
         # --- Single Lambda for both feedback routes ------------------------
-        lambdas_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "lambdas"
+        lambda_asset_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "lambda", "feedback"
         )
         fn = _lambda.Function(
             self,
             "FeedbackHandler",
             runtime=_lambda.Runtime.PYTHON_3_12,
-            handler="feedback_handler.handler",
-            code=_lambda.Code.from_asset(lambdas_path),
+            handler="handler.lambda_handler",
+            code=_lambda.Code.from_asset(lambda_asset_path),
             environment={"BUCKET_NAME": bucket.bucket_name},
-            timeout=Duration.seconds(20),
+            timeout=Duration.seconds(10),
             log_retention=logs.RetentionDays.ONE_MONTH,
         )
 

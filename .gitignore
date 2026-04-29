@@ -1,5 +1,5 @@
 # --- Python ---
-__pycache__/
+infra/stacks/__pycache__/
 *.py[cod]
 *$py.class
 *.so

@@ -21,10 +21,19 @@ need to appear below:
   `CognitoUserPoolsAuthorizer` to both routes when provided, no-ops otherwise)
 - Python CDK (ported from TypeScript for consistency with the rest of the
   codebase)
+- Single-Lambda design — client agreed on 2026-04-29 (see §1 below for
+  history)
+- Bucket name `copycraft-telemetry-{account}` — matches the `copycraft-*`
+  convention used elsewhere in the codebase (applied 2026-04-29, see §3)
+- Lambda asset path `lambda/feedback/` and handler `handler.lambda_handler`
+  — now matches the contract's shape (applied 2026-04-29, see §4)
+- Lambda timeout 10s — matches contract (applied 2026-04-29, was 20s)
+- Success response body `{"status": "ok"}` — matches contract (applied
+  2026-04-29; previously returned `{"message": "ok", "key": "..."}`)
 
 ---
 
-## §1 — Single Lambda vs. two Lambdas
+## §1 — Single Lambda vs. two Lambdas — RESOLVED
 
 **Contract:** two separate functions, `EditDecisionHandler` and
 `RatingHandler`, each with a `FEEDBACK_TYPE` env var driving the behaviour.
@@ -32,20 +41,12 @@ need to appear below:
 **Current stack:** one Lambda, `FeedbackHandler`, routing by
 `event["resource"]`.
 
-**Why deferred:** PLAN.md explicitly chose single-Lambda for code reuse; the
-contract splits them without articulating a benefit. Three paths forward:
-
-- **A.** Match the contract exactly — two `Function` constructs, two log
-  groups, two deployments.
-- **B.** Push back — keep single Lambda, document the rationale.
-- **C.** Hybrid — one `Code.from_asset()`, two `Function` constructs pointing
-  at it, each with its own `FEEDBACK_TYPE` env var. Matches the contract's
-  deployment model without duplicating code.
-
-**Decision owner:** client (architectural preference).
-
-**Trigger:** resolve before the harness lands — deploying the harness against
-one Lambda when the contract expects two would mean a rename in production.
+**Resolution (2026-04-29):** client agreed to keep the single-Lambda design.
+Rationale: both routes share identical IAM (S3 PutObject + Comprehend), the
+handler's route branches can't interfere with each other, and a single
+warm container serves both routes — benefiting the lower-frequency rating
+route. If per-route CloudWatch metrics become important, we'll emit
+structured EMF from the handler rather than splitting the function.
 
 ---
 
@@ -72,39 +73,35 @@ auto_delete_objects=not is_prod
 
 ---
 
-## §3 — Bucket name
+## §3 — Bucket name — RESOLVED
 
 **Contract:** `copycraft-telemetry-{account}` — matches the existing
 `copycraft-*` naming convention in the broader codebase.
 
-**Current stack:** CDK auto-generated name (e.g.
-`telemetrystack-telemetrybucket710ff2c8-xxxxx`).
+**Resolution (2026-04-29):** client approved. Stack now sets
+`bucket_name=f"copycraft-telemetry-{self.account}"`. The previous
+auto-generated name was safer during early iteration (stack
+delete-redeploy cycles didn't collide on the global S3 namespace) but the
+explicit name is what the contract asks for and matches how other
+Copycraft stacks consume resources by name.
 
-**Why deferred:** this is contract open question #4 — the client asked it
-themselves. Using an auto-generated name is safer during iteration
-(stack-delete-redeploy cycles don't collide on the global S3 namespace).
-
-**Proposed resolution when decided:**
-
-```python
-bucket_name=f"copycraft-telemetry-{self.account}"
-```
-
-**Decision owner:** client.
+**Implication:** if a stale bucket from a previous deploy still exists at
+this name, `cdk deploy` will fail with a "bucket already exists" error.
+Delete the old bucket (or its contents + the bucket) before the first
+redeploy.
 
 ---
 
-## §4 — Lambda asset path and handler name
+## §4 — Lambda asset path and handler name — RESOLVED
 
 **Contract:** `lambda/feedback/` directory, handler `handler.lambda_handler`.
 
-**Current stack:** `lambdas/` directory, handler `feedback_handler.handler`.
+**Resolution (2026-04-29):** renamed. The handler file now lives at
+`lambda/feedback/handler.py` with a `lambda_handler(event, context)` entry
+point. The old `lambdas/feedback_handler.py` has been removed.
 
-**Why deferred:** cosmetic; the code works either way. Renaming is
-mechanical but should happen alongside §1 (if we split into two Lambdas,
-we'll reorganise the directory anyway).
-
-**Decision owner:** resolve with §1.
+Single-Lambda design is preserved — the directory rename is purely
+cosmetic, it does not split the function.
 
 ---
 
@@ -203,11 +200,12 @@ TelemetryStack(
 
 ---
 
-## §9 — Bucket name collision risk (contract open question #4)
+## §9 — Bucket name collision risk — RESOLVED
 
-Resolved together with §3. If the client picks the auto-generated name,
-there is no collision. If they pick `copycraft-telemetry-{account}`, the
-single-account assumption is explicit.
+Resolved by §3. The `copycraft-telemetry-{account}` name is globally
+unique per AWS account, so single-account deploys are safe. Cross-account
+or same-account redeploys after a stack delete need to ensure the bucket
+has been fully deleted first (see §3 "Implication").
 
 ---
 
@@ -260,8 +258,41 @@ Direct copies from `contracts.md` for traceability:
    frontend currently generates `threadId` per request. Reuse or separate?
 3. **Comprehend cost**: add `ENABLE_PII_REDACTION` flag for dev? (Proposed
    yes — see §7.)
-4. **Bucket naming**: `telemetry-bucket` (PLAN.md) vs.
-   `copycraft-telemetry-{account}` (contract convention)? See §3.
+4. **Bucket naming**: resolved in §3 — `copycraft-telemetry-{account}`.
+
+---
+
+## §13 — S3 encryption: default SSE-S3 instead of SSE-KMS
+
+**Contract:** `encryption=BucketEncryption.KMS_MANAGED` (AWS-managed KMS
+key — SSE-KMS).
+
+**Current stack:** `encryption` argument omitted. S3 applies SSE-S3
+(S3-managed keys) automatically, which has been the default for every new
+bucket since 2023-01-05.
+
+**Rationale (2026-04-29):** the client asked to revert to default
+encryption rather than KMS-managed. SSE-S3 is simpler operationally (no
+KMS key to manage, no per-object KMS calls, no cross-service KMS
+permissions to grant), and for write-once analytics JSON the threat model
+doesn't obviously benefit from the extra KMS layer.
+
+**Trade-offs to flag to the client:**
+
+- No per-object audit trail in CloudTrail KMS events. With SSE-KMS, every
+  object read/write generates a `kms:Decrypt` / `kms:GenerateDataKey`
+  CloudTrail entry. With SSE-S3 you only get S3 data-plane events (which
+  require S3 data events to be enabled separately).
+- No envelope-key rotation policy under client control. SSE-S3 keys are
+  rotated by AWS on an undocumented schedule.
+- If the client's compliance posture later requires CMK-backed
+  encryption (e.g. certain FCA or internal data-classification policies),
+  flipping back to `BucketEncryption.KMS_MANAGED` is a one-line change —
+  but it is a replacement on the bucket for new objects only; existing
+  objects stay under their original SSE-S3 envelope until re-uploaded.
+
+**Decision owner:** client — confirm this is acceptable for the data
+classification of the feedback payloads.
 
 ---
 
@@ -269,11 +300,14 @@ Direct copies from `contracts.md` for traceability:
 
 | Decision           | Blocks                                             |
 | ------------------ | -------------------------------------------------- |
-| §1 Lambda split    | §4 directory rename, deployment automation         |
 | §2 Removal policy  | Prod deployment                                    |
-| §3 Bucket name     | Discovery from other stacks, cross-account imports |
 | §5/§6 Validation   | Front-end harness reliability                      |
 | §7 PII wiring      | Compliance review                                  |
 | §8 Cognito wiring  | Acceptance criterion #8 (auth test)                |
 | §10 AGUI streaming | Phase 2 agent integration                          |
 | §11 CloudFront     | Front-end consuming the feedback API               |
+| §13 Encryption     | Nothing technical, but needs client sign-off for   |
+|                    | compliance / audit posture                         |
+
+Items §1, §3, §4, and §9 have been resolved and are now listed under
+"Applied in this stack" at the top of this file.
