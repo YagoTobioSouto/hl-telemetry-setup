@@ -1,26 +1,67 @@
-# Dependencies
-node_modules/
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-# CDK build output
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build artifacts
+*.egg-info/
+*.egg
+build/
+dist/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# --- AWS CDK ---
+# Synthesized CloudFormation + assets
 infra/cdk.out/
+cdk.out/
 
-# TypeScript compiled output
-infra/dist/
-*.js
-*.js.map
-*.d.ts
-!infra/bin/*.js
+# Local CDK CLI state
+.cdk.staging/
 
-# CDK context (auto-generated, optional to commit)
+# Context file is sometimes committed to pin lookups; leaving it committed
+# is the safer default. Uncomment to ignore.
 # cdk.context.json
 
-# OS
-.DS_Store
+# --- Lambda artifacts ---
+# Local bundling / zipping output, if any
+lambdas/**/build/
+lambdas/**/dist/
+lambdas/**/*.zip
 
-# IDE
-.vscode/
-.idea/
+# --- AWS ---
+# Never commit credentials
+.aws/
+aws.config
 
-# Environment
+# --- Environment / secrets ---
 .env
 .env.*
+!.env.example
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
