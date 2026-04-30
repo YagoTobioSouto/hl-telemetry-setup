@@ -1,0 +1,16 @@
+Subject: Product Roadmap — Q4 Planning
+
+Team,
+
+I wanted to share an early draft of the Q4 product roadmap for your feedback.
+
+Focus areas:
+
+  - Ship the analytics dashboard redesign (in flight, target mid-October).
+  - Close out the outstanding SSO integration tickets.
+  - Begin scoping the multi-region rollout.
+
+Let me know if I've missed anything you were expecting to see. Happy to chat on Slack or book 15 minutes.
+
+Cheers,
+Sam

@@ -1,0 +1,4 @@
+# Local testing dependencies - mirrors lambda/requirements.txt exactly.
+# No PyTorch CPU index needed anymore: no torch at all.
+scikit-learn==1.5.2
+rouge-score==0.1.2

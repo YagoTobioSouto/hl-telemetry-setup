@@ -1,0 +1,4 @@
+# Lambda dependencies for TF-IDF + ROUGE-L similarity scoring.
+# No PyTorch, no transformers, no bert-score — just sklearn and rouge.
+scikit-learn==1.5.2
+rouge-score==0.1.2

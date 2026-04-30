@@ -117,7 +117,7 @@ class ColumnDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     width_pct: int = Field(ge=10, le=90)
-    blocks: List["AuthoredBlock"]
+    blocks: List["InnerBlock"]
 
 
 class ColumnLayoutBlock(BlockBase):
@@ -201,6 +201,26 @@ class LiquidMacroBlock(BlockBase):
 # ---------------------------------------------------------------------------
 # Discriminated union
 # ---------------------------------------------------------------------------
+
+# Non-recursive union for use inside columns (excludes ColumnLayoutBlock)
+InnerBlock = Annotated[
+    Union[
+        HeroBlock,
+        HeadingBlock,
+        ParagraphBlock,
+        CtaBlock,
+        FeatureRowBlock,
+        DisclaimerBlock,
+        DividerBlock,
+        SpacerBlock,
+        TableBlock,
+        LiquidMacroBlock,
+    ],
+    Field(discriminator="type"),
+]
+
+# Resolve forward reference now that InnerBlock is defined
+ColumnDefinition.model_rebuild()
 
 AuthoredBlock = Annotated[
     Union[
@@ -296,5 +316,5 @@ class EmailDraft(BaseModel):
     metadata: DraftMetadata
 
 
-# Forward-reference resolution for ColumnDefinition.blocks recursion
-ColumnDefinition.model_rebuild()
+# Resolve all forward references from `from __future__ import annotations`
+EmailDraft.model_rebuild()
