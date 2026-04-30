@@ -4,90 +4,87 @@
   "brand_id": "hargreaves-lansdown",
   "email_type": "isa-deadline",
   "persona": "ellie",
-  "subject": "You still have \u00a33,200 of ISA allowance left to use",
-  "pre_header": "Your tax year allowance ends on 5 April \u2013 top up today and make the most of your tax-efficient savings",
+  "subject": "ISA deadline: \u00a33,200 of your 2025/26 allowance still available",
+  "pre_header": "Your ISA allowance doesn't carry forward - use it or lose it by 5 April",
   "blocks": [
     {
-      "id": "blk_hero_isa_deadline",
+      "id": "blk_hero_01",
       "type": "hero",
       "template_id": "hl_isa_deadline_banner_v1",
-      "slot_values": null,
+      "slot_values": {
+        "heading": "ISA deadline reminder",
+        "subheading": "Make the most of your remaining allowance"
+      },
       "alt_override": null
     },
     {
-      "id": "blk_salutation",
+      "id": "blk_salutation_01",
       "type": "paragraph",
-      "html": "<p><span data-liquid-tag=\"hl_salutation\">[Hi firstname]</span></p>",
+      "html": "<p><span data-liquid-tag=\"hl_salutation\">[Dear valued client]</span>,</p>",
       "variant": "body"
     },
     {
-      "id": "blk_heading_allowance",
-      "type": "heading",
-      "level": "h1",
-      "text": "You have \u00a33,200 of ISA allowance left",
-      "align": null
-    },
-    {
-      "id": "blk_para_intro",
-      "type": "paragraph",
-      "html": "<p>The tax year ends at 23:59 on <strong>5 April</strong>, and you've already used \u00a316,800 of your \u00a320,000 ISA allowance this year. That means you still have \u00a33,200 available to invest tax-efficiently.</p>",
-      "variant": "body"
-    },
-    {
-      "id": "blk_para_no_carry_forward",
-      "type": "paragraph",
-      "html": "<p>Any allowance you don't use will be lost \u2013 it doesn't carry forward to the next tax year. So if you'd like to make the most of your tax-free wrapper, now's the time to act.</p>",
-      "variant": "body"
-    },
-    {
-      "id": "blk_heading_why_top_up",
+      "id": "blk_heading_01",
       "type": "heading",
       "level": "h2",
-      "text": "Why top up your Stocks & Shares ISA?",
+      "text": "Your ISA allowance update",
       "align": null
     },
     {
-      "id": "blk_para_benefits",
+      "id": "blk_para_01",
       "type": "paragraph",
-      "html": "<p>When you invest in a Stocks &amp; Shares ISA, any potential growth and income is shielded from UK Income Tax and Capital Gains Tax. The earlier you invest, the more time your money has to potentially grow.</p>",
+      "html": "<p>The tax year ends at 23:59 on 5 April 2026, which means your ISA allowance for 2025/26 will soon reset. Any unused allowance <strong>does not carry forward</strong> to the next tax year.</p>",
       "variant": "body"
     },
     {
-      "id": "blk_cta_top_up",
-      "type": "cta",
-      "label": "Top up your ISA",
-      "href": "https://www.hl.co.uk/investment-services/stocks-and-shares-isa/top-up"
+      "id": "blk_para_02",
+      "type": "paragraph",
+      "html": "<p>Based on your current ISA activity, you have used <strong>\u00a316,800</strong> of your \u00a320,000 ISA allowance for the 2025/26 tax year, leaving <strong>\u00a33,200</strong> still available to invest.</p>",
+      "variant": "body"
+    },
+    {
+      "id": "blk_feature_01",
+      "type": "feature_row",
+      "icon_url": "https://www.hl.co.uk/assets/icons/calendar.svg",
+      "heading": "Key deadline",
+      "body": "5 April 2026 at 23:59 - Tax year end"
+    },
+    {
+      "id": "blk_feature_02",
+      "type": "feature_row",
+      "icon_url": "https://www.hl.co.uk/assets/icons/piggybank.svg",
+      "heading": "Remaining allowance",
+      "body": "\u00a33,200 of \u00a320,000 available"
+    },
+    {
+      "id": "blk_feature_03",
+      "type": "feature_row",
+      "icon_url": "https://www.hl.co.uk/assets/icons/warning.svg",
+      "heading": "Important note",
+      "body": "Unused allowance does not carry forward to 2026/27"
     },
     {
       "id": "blk_divider_01",
       "type": "divider"
     },
     {
-      "id": "blk_heading_questions",
-      "type": "heading",
-      "level": "h2",
-      "text": "Got questions?",
-      "align": null
+      "id": "blk_cta_01",
+      "type": "cta",
+      "label": "Top up your Stocks & Shares ISA",
+      "href": "https://www.hl.co.uk/investment-services/stocks-and-shares-isa/top-up"
     },
     {
-      "id": "blk_para_support",
-      "type": "paragraph",
-      "html": "<p>Our team is here to help if you need guidance on how to top up or have any questions about your ISA. Just give us a call or visit our help centre online.</p>",
-      "variant": "body"
+      "id": "blk_divider_02",
+      "type": "divider"
     },
     {
-      "id": "blk_spacer_01",
-      "type": "spacer",
-      "height": 20
-    },
-    {
-      "id": "blk_disclaimer_risk",
+      "id": "blk_disclaimer_01",
       "type": "disclaimer",
-      "html": "<p>This information is not personal advice or a recommendation to invest. If you're unsure whether an investment is right for you, please seek advice. Tax rules can change and the benefits depend on your individual circumstances. The value of investments can fall as well as rise, so you could get back less than you invest.</p>",
+      "html": "<p>This information is not a personal recommendation for any particular investment. If you are unsure about the suitability of an investment you should speak to one of our advisers. Tax rules can change and their effects depend on your individual circumstances. The value of investments can fall as well as rise and you may get back less than you invest.</p>",
       "variant": "small_print"
     },
     {
-      "id": "blk_footer_hl",
+      "id": "blk_footer_01",
       "type": "liquid_macro",
       "expression": "{{${email_footer}}}",
       "preview_label": "[HL footer]"
@@ -97,8 +94,9 @@
   "metadata": {
     "pass": 1,
     "converged": true,
-    "word_count": 198,
+    "word_count": 98,
     "reading_age": null,
-    "tone": "warm-professional"
+    "tone": null,
+    "tracking_lid": null
   }
 }

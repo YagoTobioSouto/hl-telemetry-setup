@@ -36,46 +36,49 @@ Prerequisites:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
+import time
 from pathlib import Path
 
+import botocore.config
 from strands import Agent
 from strands.models import BedrockModel
 
 # Import the canonical schema (sibling file)
 import sys
-from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "schema"))
 from email_blocks_schema import EmailDraft
-
 
 # ---------------------------------------------------------------------------
 # Bedrock model config
 # ---------------------------------------------------------------------------
-#
-# Use the EU cross-region inference profile for Claude Sonnet 4.5.
-# Override via env vars if you need to swap models or regions.
 
 BEDROCK_MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
-    "eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "nvidia.nemotron-super-3-120b",
+    # "zai.glm-5",  # Z.AI GLM 5 — also available in eu-west-2
 )
-BEDROCK_REGION = os.getenv("BEDROCK_REGION", "eu-west-1")
+BEDROCK_REGION = os.getenv("BEDROCK_REGION", "eu-west-2")
 
 
 def _build_model() -> BedrockModel:
-    return BedrockModel(model_id=BEDROCK_MODEL_ID, region_name=BEDROCK_REGION)
+    return BedrockModel(
+        model_id=BEDROCK_MODEL_ID,
+        region_name=BEDROCK_REGION,
+        streaming=False,
+        boto_client_config=botocore.config.Config(
+            read_timeout=300,
+            retries={"max_attempts": 1},
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
 
-# The prompt deliberately does NOT describe field names — Strands sends the
-# JSON Schema to the model as a tool spec. The prompt only describes *intent*
-# and the block-based authoring philosophy.
 SYSTEM_PROMPT = """\
 You are Copycraft, Hargreaves Lansdown's email copywriter.
 
@@ -145,89 +148,49 @@ Must include:
 # Runner — sync
 # ---------------------------------------------------------------------------
 
+
 def run_sync() -> EmailDraft:
-    """
-    Simplest form: one-shot structured output.
+    """One-shot structured output."""
+    print(f"🚀 model={BEDROCK_MODEL_ID}  region={BEDROCK_REGION}")
 
-    Use this shape when you want the LLM to emit the full EmailDraft in one
-    invocation — e.g. after your pipeline has converged and you're binding
-    the final pass to the canonical schema.
-    """
     agent = Agent(
         model=_build_model(),
         system_prompt=SYSTEM_PROMPT,
-        # Agent-level default: every invocation returns an EmailDraft.
         structured_output_model=EmailDraft,
     )
+
+    print("📡 Calling agent...")
+    t0 = time.time()
     result = agent(BRIEF)
-    # result.structured_output is a fully validated EmailDraft instance.
+    print(f"⏱️  Completed in {time.time() - t0:.1f}s")
+
     return result.structured_output
-
-
-# ---------------------------------------------------------------------------
-# Runner — streaming (closer to the AG-UI pipeline in design.md)
-# ---------------------------------------------------------------------------
-
-async def run_streaming() -> EmailDraft:
-    """
-    Streaming variant: yields intermediate text events during generation,
-    then the final validated EmailDraft.
-
-    In your actual AgentCore Runtime container, you'd bridge these events
-    to AG-UI SSE events (text_message_chunk, state_delta, run_finished).
-    """
-    agent = Agent(
-        model=_build_model(),
-        system_prompt=SYSTEM_PROMPT,
-    )
-
-    if not _SUPPORTS_MODERN_STRUCTURED_OUTPUT:
-        # Legacy Strands has no streaming path for structured output.
-        # Fall back to the async one-shot call.
-        return await agent.structured_output_async(EmailDraft, BRIEF)
-
-    final_draft: EmailDraft | None = None
-
-    async for event in agent.stream_async(
-        BRIEF,
-        structured_output_model=EmailDraft,
-    ):
-        # Token-level stream — relay to AG-UI text_message_chunk in production.
-        if "data" in event:
-            print(event["data"], end="", flush=True)
-        # Terminal event — contains the validated structured output.
-        elif "result" in event:
-            final_draft = event["result"].structured_output
-
-    assert final_draft is not None, "stream ended without a result event"
-    return final_draft
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _write_output(draft: EmailDraft, out_path: Path) -> None:
-    """Serialise using `by_alias=True` because DraftMetadata aliases pass_ -> pass."""
+    """Serialise using by_alias=True because DraftMetadata aliases pass_ -> pass."""
     out_path.write_text(
         json.dumps(draft.model_dump(by_alias=True, mode="json"), indent=2),
         encoding="utf-8",
     )
-    print(f"\n\n✅ Wrote validated EmailDraft to {out_path}")
+    print(f"\n✅ Wrote validated EmailDraft to {out_path}")
     print(f"   subject     : {draft.subject}")
     print(f"   pre_header  : {draft.pre_header}")
-    print(f"   blocks      : {len(draft.blocks)} ({', '.join(b.type for b in draft.blocks)})")
+    print(
+        f"   blocks      : {len(draft.blocks)} ({', '.join(b.type for b in draft.blocks)})"
+    )
     print(f"   annotations : {len(draft.annotations)}")
-    print(f"   pass        : {draft.metadata.pass_}  converged={draft.metadata.converged}")
+    print(
+        f"   pass        : {draft.metadata.pass_}  converged={draft.metadata.converged}"
+    )
 
 
 if __name__ == "__main__":
     out = Path(__file__).parent / "email-draft-generated.json"
-
-    mode = os.getenv("MODE", "sync")  # set MODE=stream to try streaming
-    if mode == "stream":
-        draft = asyncio.run(run_streaming())
-    else:
-        draft = run_sync()
-
+    draft = run_sync()
     _write_output(draft, out)

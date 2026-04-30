@@ -1,0 +1,88 @@
+{
+  "draft_id": "draft_test_01",
+  "campaign_id": "campaign_isa_deadline_2026",
+  "brand_id": "hargreaves-lansdown",
+  "email_type": "isa-deadline",
+  "persona": "ellie",
+  "subject": "Your ISA allowance reminder: \u00a33,200 left to use before 5 April",
+  "pre_header": "Make the most of your ISA allowance before it resets on 5 April",
+  "blocks": [
+    {
+      "id": "blk_hero_01",
+      "type": "hero",
+      "template_id": "hl_isa_deadline_banner_v1",
+      "slot_values": null,
+      "alt_override": null
+    },
+    {
+      "id": "blk_spacer_01",
+      "type": "spacer",
+      "height": 16
+    },
+    {
+      "id": "blk_salutation_01",
+      "type": "paragraph",
+      "html": "<p><span data-liquid-tag=\"hl_salutation\">[Dear Investor]</span></p>",
+      "variant": "body"
+    },
+    {
+      "id": "blk_para_01",
+      "type": "paragraph",
+      "html": "<p>The tax year ends at 23:59 on 5 April, which means your ISA allowance will soon reset. This is your reminder to review how much you\u2019ve left to use.</p>",
+      "variant": "body"
+    },
+    {
+      "id": "blk_para_02",
+      "type": "paragraph",
+      "html": "<p>So far this tax year, you\u2019ve used <strong>\u00a316,800</strong> of your <strong>\u00a320,000</strong> ISA allowance. That leaves <strong>\u00a33,200</strong> available to invest before the deadline.</p>",
+      "variant": "body"
+    },
+    {
+      "id": "blk_para_03",
+      "type": "paragraph",
+      "html": "<p>Remember: any unused allowance does <em>not</em> carry forward to the next tax year. Once the deadline passes, this year\u2019s allowance is gone.</p>",
+      "variant": "body"
+    },
+    {
+      "id": "blk_divider_01",
+      "type": "divider"
+    },
+    {
+      "id": "blk_cta_01",
+      "type": "cta",
+      "label": "Top up my Stocks & Shares ISA",
+      "href": "https://www.hl.co.uk/investment-services/stocks-and-shares-isa/top-up"
+    },
+    {
+      "id": "blk_spacer_02",
+      "type": "spacer",
+      "height": 16
+    },
+    {
+      "id": "blk_disclaimer_01",
+      "type": "disclaimer",
+      "html": "<p>This information is not personal advice. Tax rules can change and their benefits depend on your individual circumstances. The value of investments can fall as well as rise, so you could get back less than you invest.</p>",
+      "variant": "small_print"
+    },
+    {
+      "id": "blk_spacer_03",
+      "type": "spacer",
+      "height": 16
+    },
+    {
+      "id": "blk_footer_01",
+      "type": "liquid_macro",
+      "expression": "{{${email_footer}}}",
+      "preview_label": "[HL footer]"
+    }
+  ],
+  "annotations": [],
+  "metadata": {
+    "pass": 1,
+    "converged": true,
+    "word_count": 89,
+    "reading_age": null,
+    "tone": null,
+    "tracking_lid": null
+  }
+}
