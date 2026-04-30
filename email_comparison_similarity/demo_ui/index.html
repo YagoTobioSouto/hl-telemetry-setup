@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Similarity Check — Demo</title>
+
+  <style>
+    /* ---------- Design tokens ---------- */
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #e4e7ec;
+      --border-strong: #d0d5dd;
+      --text: #101828;
+      --text-muted: #667085;
+      --text-subtle: #98a2b3;
+
+      /* Verdict accents */
+      --verdict-distinct-bg: #ecfdf3;
+      --verdict-distinct-fg: #027a48;
+      --verdict-distinct-dot: #12b76a;
+
+      --verdict-related-bg: #fffaeb;
+      --verdict-related-fg: #b54708;
+      --verdict-related-dot: #f79009;
+
+      --verdict-near-bg: #fef3f2;
+      --verdict-near-fg: #b42318;
+      --verdict-near-dot: #f04438;
+
+      --confidence-low: #98a2b3;
+      --confidence-medium: #f79009;
+      --confidence-high: #12b76a;
+
+      --bar-bg: #f2f4f7;
+      --bar-fill: #7c8aa0;
+      --bar-fill-rank1: #344054;
+
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    /* ---------- Top meta bar ---------- */
+    .top-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .top-meta strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .scenario-toggle {
+      display: inline-flex;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+    }
+
+    .scenario-toggle button {
+      border: 0;
+      background: transparent;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .scenario-toggle button.active {
+      background: var(--text);
+      color: #fff;
+    }
+
+    .scenario-toggle button:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* ---------- Main card ---------- */
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    /* ---------- Headline region ---------- */
+    .headline {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .headline-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .badges { display: flex; gap: 8px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .badge-verdict-distinct       { background: var(--verdict-distinct-bg); color: var(--verdict-distinct-fg); }
+    .badge-verdict-distinct .badge-dot { background: var(--verdict-distinct-dot); }
+
+    .badge-verdict-related        { background: var(--verdict-related-bg); color: var(--verdict-related-fg); }
+    .badge-verdict-related .badge-dot  { background: var(--verdict-related-dot); }
+
+    .badge-verdict-near_duplicate { background: var(--verdict-near-bg); color: var(--verdict-near-fg); }
+    .badge-verdict-near_duplicate .badge-dot { background: var(--verdict-near-dot); }
+
+    .badge-confidence {
+      background: #f2f4f7;
+      color: var(--text-muted);
+    }
+
+    .badge-confidence .badge-dot {
+      background: var(--confidence-low);
+    }
+    .badge-confidence[data-level="medium"] .badge-dot { background: var(--confidence-medium); }
+    .badge-confidence[data-level="high"] .badge-dot   { background: var(--confidence-high); }
+
+    .explanation {
+      font-size: 16px;
+      line-height: 1.5;
+      margin: 0;
+      color: var(--text);
+    }
+
+    /* ---------- Expand toggle ---------- */
+    .expand-row {
+      display: flex;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      background: #fafbfc;
+    }
+
+    .expand-btn {
+      width: 100%;
+      background: transparent;
+      border: 0;
+      padding: 12px 24px;
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: color 0.15s;
+    }
+
+    .expand-btn:hover { color: var(--text); }
+
+    .expand-btn .caret {
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+
+    .expand-btn.open .caret {
+      transform: rotate(180deg);
+    }
+
+    /* ---------- Details panel ---------- */
+    .details {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .details.open {
+      max-height: 1800px;
+    }
+
+    .details-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    .pane {
+      padding: 20px 24px;
+    }
+
+    .pane + .pane {
+      border-left: 1px solid var(--border);
+    }
+
+    .pane-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-subtle);
+      margin: 0 0 10px;
+    }
+
+    /* ---------- Draft block ---------- */
+    .draft {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      color: var(--text);
+      background: #fafbfc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    /* ---------- Reference list ---------- */
+    .ref-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+
+    .ref {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      background: #fff;
+    }
+
+    .ref-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .ref-id {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .ref-rank {
+      font-size: 11px;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .ref[data-rank="1"] .ref-id { color: #0b2d4f; }
+
+    .ref-bar {
+      height: 6px;
+      background: var(--bar-bg);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+
+    .ref-bar-fill {
+      height: 100%;
+      background: var(--bar-fill);
+      width: 0;
+      transition: width 0.7s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+
+    .ref[data-rank="1"] .ref-bar-fill { background: var(--bar-fill-rank1); }
+
+    .ref-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .ref-meta strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ---------- Evidence block ---------- */
+    .evidence-block {
+      border-top: 1px dashed var(--border);
+      padding-top: 16px;
+    }
+
+    .evidence-sub {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 0 0 6px;
+    }
+
+    .shared-terms {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .chip {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      padding: 3px 8px;
+      background: #f2f4f7;
+      color: var(--text-muted);
+      border-radius: 4px;
+    }
+
+    .chip.substantive {
+      background: #f0f4ff;
+      color: #2e4bbf;
+    }
+
+    .phrase {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      background: #fafbfc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      margin-bottom: 14px;
+    }
+
+    .phrase strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .originality {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .originality-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--bar-bg);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .originality-bar-fill {
+      height: 100%;
+      background: var(--bar-fill);
+      width: 0;
+      transition: width 0.7s cubic-bezier(0.33, 1, 0.68, 1) 0.15s;
+    }
+
+    /* ---------- Footer ---------- */
+    .footer {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-subtle);
+      text-align: center;
+    }
+
+    .footer code {
+      font-family: var(--mono);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 4px;
+    }
+
+    /* ---------- Narrow viewport ---------- */
+    @media (max-width: 680px) {
+      .details-inner {
+        grid-template-columns: 1fr;
+      }
+      .pane + .pane {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+      }
+      .top-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-meta">
+      <div>
+        <strong>Similarity Check</strong> — demo UI for
+        <code style="font-family: var(--mono); font-size: 11px; background: #fff; border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px;">SimilarityEvaluation</code>
+      </div>
+      <div class="scenario-toggle" role="tablist" aria-label="Scenario">
+        <button data-scenario="distinct" class="active">All unrelated</button>
+        <button data-scenario="near_duplicate">One near-duplicate</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- Headline -->
+      <div class="headline">
+        <div class="headline-top">
+          <p class="title">Draft similarity</p>
+          <div class="badges">
+            <span class="badge" id="verdict-badge">
+              <span class="badge-dot"></span>
+              <span id="verdict-label">distinct</span>
+            </span>
+            <span class="badge badge-confidence" id="confidence-badge" data-level="low">
+              <span class="badge-dot"></span>
+              <span>confidence: <strong id="confidence-label">low</strong></span>
+            </span>
+          </div>
+        </div>
+        <p class="explanation" id="explanation">
+          Your draft is distinct from all source emails; the only overlap is generic email filler ('let me know if', 'wanted to share').
+        </p>
+      </div>
+
+      <!-- Expand -->
+      <div class="expand-row">
+        <button class="expand-btn" id="expand-btn">
+          <span id="expand-label">Show details</span>
+          <span class="caret">▾</span>
+        </button>
+      </div>
+
+      <!-- Details -->
+      <div class="details" id="details">
+        <div class="details-inner">
+          <!-- Draft pane -->
+          <div class="pane">
+            <p class="pane-title">Draft</p>
+            <pre class="draft" id="draft-text"></pre>
+          </div>
+
+          <!-- References + evidence pane -->
+          <div class="pane">
+            <p class="pane-title">Source emails (ranked)</p>
+            <div class="ref-list" id="ref-list"></div>
+
+            <div class="evidence-block">
+              <p class="evidence-sub">Evidence (rank-1 only)</p>
+
+              <p class="evidence-sub" style="margin-top: 8px;">Shared terms</p>
+              <div class="shared-terms" id="shared-terms"></div>
+
+              <p class="evidence-sub">Longest shared phrase</p>
+              <div class="phrase">
+                <strong id="phrase-text">—</strong>
+                <span id="phrase-tokens" style="margin-left: 8px; color: var(--text-subtle);"></span>
+              </div>
+
+              <p class="evidence-sub">Originality</p>
+              <div class="originality">
+                <div class="originality-bar">
+                  <div class="originality-bar-fill" id="originality-fill"></div>
+                </div>
+                <span id="originality-pct">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer">
+      Mockup only — static HTML with embedded fixtures. Real output comes from
+      <code>evaluator_agent/agent.py → evaluate_similarity()</code>.
+    </p>
+  </div>
+
+  <script>
+    // ----------------------------------------------------------------
+    // Scenario data: the real JSON contract the Evaluator produces,
+    // plus the draft + source email texts embedded so the page works
+    // when opened from file:// without a web server.
+    // ----------------------------------------------------------------
+
+    const DRAFT_TEXT = `Subject: Q3 Pricing Follow-up — Summary of Last Week's Discussion
+
+Hi team,
+
+Just following up on the Q3 pricing discussion from last Thursday. Wanted to share a quick summary of where we landed so everyone has the same picture heading into the customer review on Friday.
+
+Key points:
+
+  1. Tier 1 SKUs stay flat. No change from Q2.
+  2. Tier 2 SKUs get a 4% uplift, effective 1 July, to offset the supplier cost increase we absorbed in Q2.
+  3. Enterprise contracts over £250k/yr are carved out — their existing terms hold until renewal.
+  4. Marketing will produce updated rate cards and send them to the field by 15 June.
+
+Let me know if anything here doesn't match what you heard in the room — happy to reconcile before the customer conversation.
+
+Thanks,
+Yago`;
+
+    // ---- Scenario 1: All unrelated references (the JSON you pasted) ----
+    const SCENARIO_DISTINCT = {
+      draft: DRAFT_TEXT,
+      sources: {
+        id_1: `Dear [Client's Name],
+
+I hope this email finds you well.
+
+Global markets experienced mixed results this week. US equities climbed on the back of strong corporate earnings, while UK gilts found stability after recent volatility...
+
+(investment newsletter, truncated for demo)`,
+        id_2: `Subject: Product Roadmap — Q4 Planning
+
+Team,
+
+I wanted to share an early draft of the Q4 product roadmap for your feedback.
+
+Focus areas:
+  - Ship the analytics dashboard redesign (in flight, target mid-October).
+  - Close out the outstanding SSO integration tickets.
+  - Begin scoping the multi-region rollout.
+
+Let me know if I've missed anything you were expecting to see. Happy to chat on Slack or book 15 minutes.
+
+Cheers,
+Sam`,
+        id_3: `Subject: Vendor Contract — Signature Required
+
+Hi,
+
+Please find attached the vendor contract for your signature. Legal have reviewed and signed off on the terms as drafted.
+
+If you could return the countersigned copy by end of week, we can get the purchase order raised in time for the start of the next billing cycle.
+
+Any questions, let me know.
+
+Regards,
+Priya
+Procurement`,
+      },
+      evaluation: {
+        references: [
+          { email_id: "id_2", rank: 1, similarity: 0.0414, rouge_l: 0.1854, tfidf_cosine: 0.0414, relative_share: 0.5236 },
+          { email_id: "id_3", rank: 2, similarity: 0.0307, rouge_l: 0.1320, tfidf_cosine: 0.0307, relative_share: 0.3877 },
+          { email_id: "id_1", rank: 3, similarity: 0.0070, rouge_l: 0.0958, tfidf_cosine: 0.0070, relative_share: 0.0887 },
+        ],
+        verdict: "distinct",
+        confidence: "low",
+        evidence: {
+          shared_terms: [
+            { term: "15",           weight: 0.0707 },
+            { term: "happy",        weight: 0.0707 },
+            { term: "share",        weight: 0.0707 },
+            { term: "wanted",       weight: 0.0707 },
+            { term: "wanted share", weight: 0.0707 },
+          ],
+          longest_shared_phrase: { text: "let me know if", token_count: 4 },
+          candidate_unique_term_ratio: 0.927,
+        },
+        explanation: "Your draft is distinct from all source emails; the only overlap is generic email filler ('let me know if', 'wanted to share').",
+      },
+    };
+
+    // ---- Scenario 2: One near-duplicate reference ----
+    //
+    // Mirrors the actual fixtures_copycat run from earlier development:
+    // same draft, but one of the references is a heavily-paraphrased
+    // version of the draft itself. Scores are the ones produced by the
+    // deployed scoring Lambda during that run.
+    const SCENARIO_NEAR_DUPLICATE = {
+      draft: DRAFT_TEXT,
+      sources: {
+        copycat_source: `Hi team,
+
+Following up on the Q3 pricing discussion from last Thursday. Sharing a quick summary of where we landed so everyone has the same picture for the Friday customer review.
+
+Key points:
+  1. Tier 1 SKUs remain flat. No change from Q2.
+  2. Tier 2 SKUs will see a 4% uplift effective 1 July.
+  3. Enterprise contracts above £250k/yr are grandfathered.
+  4. Marketing will issue updated rate cards by 15 June.
+
+Thanks,
+Yago`,
+        roadmap: `Subject: Product Roadmap — Q4 Planning
+
+Team,
+
+I wanted to share an early draft of the Q4 product roadmap for your feedback.
+
+(same roadmap email as the unrelated scenario's id_2)`,
+        vendor: `Subject: Vendor Contract — Signature Required
+
+Hi,
+
+Please find attached the vendor contract for your signature.
+
+(same vendor email as the unrelated scenario's id_3)`,
+      },
+      evaluation: {
+        references: [
+          { email_id: "copycat_source", rank: 1, similarity: 0.5321, rouge_l: 0.6381, tfidf_cosine: 0.5321, relative_share: 0.8706 },
+          { email_id: "roadmap",        rank: 2, similarity: 0.0446, rouge_l: 0.1854, tfidf_cosine: 0.0446, relative_share: 0.0730 },
+          { email_id: "vendor",         rank: 3, similarity: 0.0344, rouge_l: 0.1320, tfidf_cosine: 0.0344, relative_share: 0.0563 },
+        ],
+        verdict: "near_duplicate",
+        confidence: "high",
+        evidence: {
+          shared_terms: [
+            { term: "skus",       weight: 0.1674 },
+            { term: "tier",       weight: 0.1674 },
+            { term: "tier skus",  weight: 0.1674 },
+            { term: "customer",   weight: 0.1184 },
+            { term: "discussion", weight: 0.1184 },
+          ],
+          longest_shared_phrase: {
+            text: "quick summary of where we landed so everyone has the same picture",
+            token_count: 12,
+          },
+          candidate_unique_term_ratio: 0.5547,
+        },
+        explanation: "Your draft contains a 12-word phrase nearly verbatim from copycat_source ('quick summary of where we landed so everyone has the same picture').",
+      },
+    };
+
+    const SCENARIOS = {
+      distinct: SCENARIO_DISTINCT,
+      near_duplicate: SCENARIO_NEAR_DUPLICATE,
+    };
+
+    // Terms we treat as boilerplate — chip renders neutral grey.
+    // Anything NOT in this set is considered "substantive" and gets
+    // the accent colour. Mirrors _BOILERPLATE_TERMS in agent.py so
+    // the demo stays visually consistent with the real heuristics.
+    const BOILERPLATE_TERMS = new Set([
+      "wanted", "share", "wanted share", "happy", "happy to",
+      "let", "let know", "know", "thanks", "hi", "hi team",
+      "following", "follow up", "following up",
+      "15", "14", "16",
+    ]);
+
+    // ----------------------------------------------------------------
+    // Render
+    // ----------------------------------------------------------------
+
+    const els = {
+      verdictBadge:  document.getElementById("verdict-badge"),
+      verdictLabel:  document.getElementById("verdict-label"),
+      confidenceBadge: document.getElementById("confidence-badge"),
+      confidenceLabel: document.getElementById("confidence-label"),
+      explanation:   document.getElementById("explanation"),
+      draftText:     document.getElementById("draft-text"),
+      refList:       document.getElementById("ref-list"),
+      sharedTerms:   document.getElementById("shared-terms"),
+      phraseText:    document.getElementById("phrase-text"),
+      phraseTokens:  document.getElementById("phrase-tokens"),
+      originalityFill: document.getElementById("originality-fill"),
+      originalityPct:  document.getElementById("originality-pct"),
+      expandBtn:     document.getElementById("expand-btn"),
+      expandLabel:   document.getElementById("expand-label"),
+      details:       document.getElementById("details"),
+    };
+
+    function render(scenarioKey) {
+      const scenario = SCENARIOS[scenarioKey];
+      const { evaluation, draft } = scenario;
+
+      // ---- Headline ----
+      els.verdictBadge.className = "badge badge-verdict-" + evaluation.verdict;
+      els.verdictLabel.textContent = evaluation.verdict.replace("_", " ");
+      els.confidenceBadge.dataset.level = evaluation.confidence;
+      els.confidenceLabel.textContent = evaluation.confidence;
+      els.explanation.textContent = evaluation.explanation;
+
+      // ---- Draft ----
+      els.draftText.textContent = draft;
+
+      // ---- References ----
+      // Similarity bars use relative_share, not raw similarity: the
+      // share already answers "how much does this reference dominate
+      // within the batch?", which is what we want to visualise.
+      els.refList.innerHTML = "";
+      evaluation.references.forEach((ref) => {
+        const sharePct = Math.round(ref.relative_share * 100);
+        const div = document.createElement("div");
+        div.className = "ref";
+        div.dataset.rank = ref.rank;
+        div.innerHTML = `
+          <div class="ref-header">
+            <span class="ref-id">${ref.email_id}</span>
+            <span class="ref-rank">rank ${ref.rank}</span>
+          </div>
+          <div class="ref-bar"><div class="ref-bar-fill"></div></div>
+          <div class="ref-meta">
+            <span>share <strong>${sharePct}%</strong></span>
+            <span>sim <strong>${ref.similarity.toFixed(4)}</strong></span>
+            <span>rouge-L <strong>${ref.rouge_l.toFixed(4)}</strong></span>
+          </div>
+        `;
+        els.refList.appendChild(div);
+
+        // Fire the width transition on the next frame so CSS picks it up.
+        requestAnimationFrame(() => {
+          div.querySelector(".ref-bar-fill").style.width = sharePct + "%";
+        });
+      });
+
+      // ---- Shared terms ----
+      els.sharedTerms.innerHTML = "";
+      evaluation.evidence.shared_terms.forEach((t) => {
+        const chip = document.createElement("span");
+        const isSubstantive = !BOILERPLATE_TERMS.has(t.term);
+        chip.className = "chip" + (isSubstantive ? " substantive" : "");
+        chip.textContent = t.term;
+        chip.title = `weight: ${t.weight.toFixed(4)}`;
+        els.sharedTerms.appendChild(chip);
+      });
+
+      // ---- Longest shared phrase ----
+      const phrase = evaluation.evidence.longest_shared_phrase;
+      els.phraseText.textContent = phrase.text ? `"${phrase.text}"` : "(none)";
+      els.phraseTokens.textContent = phrase.token_count
+        ? `— ${phrase.token_count} tokens`
+        : "";
+
+      // ---- Originality ----
+      const originalityPct = Math.round(evaluation.evidence.candidate_unique_term_ratio * 100);
+      els.originalityPct.textContent = originalityPct + "%";
+      // Clear then fill, so the bar re-animates on scenario change.
+      els.originalityFill.style.width = "0%";
+      requestAnimationFrame(() => {
+        els.originalityFill.style.width = originalityPct + "%";
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // Interactions
+    // ----------------------------------------------------------------
+
+    // Scenario toggle
+    document.querySelectorAll(".scenario-toggle button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".scenario-toggle button")
+          .forEach((b) => b.classList.toggle("active", b === btn));
+        render(btn.dataset.scenario);
+      });
+    });
+
+    // Expand/collapse
+    els.expandBtn.addEventListener("click", () => {
+      const open = els.details.classList.toggle("open");
+      els.expandBtn.classList.toggle("open", open);
+      els.expandLabel.textContent = open ? "Hide details" : "Show details";
+    });
+
+    // Initial render
+    render("distinct");
+  </script>
+</body>
+</html>
