@@ -199,7 +199,20 @@ rate + card", which helps the signal rise above boilerplate.
   "candidate_summary": {
     "closest_match":      "id_1",
     "closest_similarity": 0.5321,
-    "confidence":         "high"
+    "confidence":         "high",
+    "verdict":            "near_duplicate",
+    "evidence": {
+      "shared_terms": [
+        {"term": "tier skus",  "weight": 0.1674},
+        {"term": "customer",   "weight": 0.1184},
+        {"term": "discussion", "weight": 0.1184}
+      ],
+      "longest_shared_phrase": {
+        "text":        "quick summary of where we landed so everyone has the same picture",
+        "token_count": 12
+      },
+      "candidate_unique_term_ratio": 0.5547
+    }
   }
 }
 ```
@@ -216,7 +229,12 @@ rate + card", which helps the signal rise above boilerplate.
 | ``references[].relative_share`` | float [0,1] | This ref's share of total similarity mass across the batch; rows sum to 1.0 |
 | ``candidate_summary.closest_match`` | string | ``email_id`` of the rank-1 reference |
 | ``candidate_summary.closest_similarity`` | float | Headline score of the closest match |
-| ``candidate_summary.confidence`` | enum | ``high`` / ``medium`` / ``low`` — see below |
+| ``candidate_summary.confidence`` | enum | ``high`` / ``medium`` / ``low`` — how decisive the ranking is, see §4.5 |
+| ``candidate_summary.verdict`` | enum | ``distinct`` / ``related`` / ``near_duplicate`` — how close the top match is, see §4.6 |
+| ``candidate_summary.evidence`` | object \| null | Deterministic "why" for the closest match only, see §4.7. ``null`` when no valid references. |
+| ``evidence.shared_terms`` | list of {term, weight} | Top 5 TF-IDF terms shared with the closest match, ranked by geometric-mean weight |
+| ``evidence.longest_shared_phrase`` | {text, token_count} | Longest *contiguous* run of matching tokens between candidate and closest match |
+| ``evidence.candidate_unique_term_ratio`` | float [0,1] | Fraction of the candidate's vocabulary that doesn't appear in the closest match (1.0 = fully original) |
 
 ### 4.4 The ``relative_share`` field — batch-relative normalisation
 
@@ -240,7 +258,7 @@ bunch look like a perfect match. Share-of-total preserves the
 absolute-vs-relative distinction, and ``confidence`` picks up the
 "everything is noise" case explicitly.
 
-### 4.5 The ``confidence`` field
+### 4.5 The ``confidence`` field — how decisive is the ranking?
 
 Computed from the gap between rank-1 and rank-2 similarity:
 
@@ -260,6 +278,90 @@ phrasing ("mildly resembles …") rather than a confident one
 
 Thresholds are empirical from the fixture set; they can be tuned
 without shape changes.
+
+### 4.6 The ``verdict`` field — how close is the closest match?
+
+Computed from the absolute rank-1 similarity:
+
+```
+verdict = "near_duplicate" if closest_similarity >= 0.50
+         | "related"        if closest_similarity >= 0.15
+         | "distinct"       otherwise
+```
+
+``confidence`` and ``verdict`` answer different questions and can
+legitimately disagree. The copywriter use case needs both:
+
+| Case | similarity | gap | confidence | verdict | What it means |
+|---|---|---|---|---|---|
+| All references unrelated | 0.04 | 0.01 | low | distinct | Noise — no match at all, and no clear pick even within the noise |
+| One decisive match | 0.53 | 0.49 | high | near_duplicate | Genuine reuse of a source email |
+| Two lukewarm near-misses | 0.22 | 0.03 | low | related | Some topical overlap with multiple sources, no clear winner |
+| One clear but moderate match | 0.30 | 0.25 | high | related | Source was referenced but not copied — fine |
+
+``verdict`` is the one-word headline the UI can render without waiting
+for a downstream LLM. ``confidence`` tells the evaluator whether the
+top pick is *stable* or a noisy tie.
+
+### 4.7 The ``evidence`` block — why did this score come out this way?
+
+Three deterministic, zero-LLM fields that explain the rank-1 score.
+Scoped to the closest match only — lower-ranked references would be
+noise for the copywriter use case and would triple the response size.
+
+**``shared_terms``** — Top 5 TF-IDF terms (unigrams + bigrams, after
+English stopword removal) present in both the candidate and the closest
+reference. Each term's weight is the geometric mean of its TF-IDF
+weights in the two documents, ``sqrt(cand_w * ref_w)``. Geometric mean
+stays in the same [0, 1] range as the headline score, so a term with
+weight 0.17 "feels" like a 0.17-level contribution.
+
+These are literally the vocabulary driving the cosine score. Ranking
+by the product of their weights surfaces the terms most responsible
+for the similarity — boilerplate "wanted share happy" for unrelated
+cases, substantive "tier skus customer discussion" for actual matches.
+
+**``longest_shared_phrase``** — Longest contiguous run of matching
+tokens between candidate and closest match. ROUGE-L's own LCS is
+non-contiguous (matches "a b c" against "a x b x c") which is fine
+for scoring but terrible evidence — nobody reading the output would
+recognise it as overlap. So we compute the contiguous version directly
+using the same tokeniser sklearn's TF-IDF uses, which guarantees the
+phrase we surface is literally part of what drove the cosine score.
+
+Comes with ``token_count`` so the downstream agent can judge
+substance: short phrases ("let me know if", 4 tokens) are filler;
+long phrases (12+ tokens) are damning evidence of verbatim reuse.
+
+**``candidate_unique_term_ratio``** — Fraction of the candidate's
+TF-IDF vocabulary that does *not* appear in the closest match. A
+simple originality proxy: 1.0 means nothing overlaps (fully original),
+0.0 means every term is shared (heavy copy). In practice a genuine
+near-duplicate halves originality (~0.55), while unrelated references
+leave it near 1.0 (~0.93).
+
+### 4.8 How the evaluator agent uses this
+
+The ``evidence`` block is the handoff to the Similarity Evaluator
+agent (shown in the architecture diagram as the node between the
+Reviewer's Final Draft and the Serializer). The agent's job is to
+take the full Lambda response + both email texts and produce a
+single user-facing sentence.
+
+The agent is expected to:
+
+* Treat ``verdict`` as the structural answer and ``evidence`` as the
+  supporting detail. It should not invent a new verdict from the raw
+  scores — the Lambda already did that work deterministically.
+* Filter ``shared_terms`` and ``longest_shared_phrase`` by substance.
+  A 4-token phrase of pure boilerplate should be omitted from the
+  sentence; a 12-token substantive match should be quoted verbatim.
+* Degrade gracefully. If the agent is unavailable, the UI should
+  render ``verdict`` + ``shared_terms`` directly as a fallback.
+
+The Lambda itself makes no LLM calls and produces no prose. This
+keeps scoring deterministic, fast, and auditable — the prose layer
+is strictly additive.
 
 ---
 

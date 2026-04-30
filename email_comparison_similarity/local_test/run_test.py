@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lambda"))
 from handler import lambda_handler  # noqa: E402
 
 HERE = Path(__file__).parent
+DEFAULT_FIXTURES = HERE.parent / "fixtures"
 
 
 def load_from_fixtures(fixtures_dir: Path) -> dict:
@@ -78,8 +79,8 @@ def parse_args() -> argparse.Namespace:
     group.add_argument(
         "--fixtures",
         type=Path,
-        default=HERE / "fixtures",
-        help="Directory containing candidate.txt and references/*.txt (default: ./fixtures)",
+        default=DEFAULT_FIXTURES,
+        help="Directory containing candidate.txt and references/*.txt (default: ../fixtures)",
     )
     group.add_argument(
         "--payload",

@@ -1,17 +1,30 @@
 # Email Similarity Service
 
-Stateless, zip-packaged AWS Lambda that scores how similar a drafted
-email is to a small set of source emails retrieved from the knowledge
-base. Returns per-reference **TF-IDF cosine** and **ROUGE-L** scores
-plus a summary block identifying the closest match and how confident
-that assessment is.
+Two components working together:
 
-Intended usage: the Strands agent pipeline invokes this Lambda after
-the Writer produces a final draft. Scores are **informational only** —
-they are surfaced to the user alongside the draft so they can see how
-close their output sits to the retrieved source emails. They do not
-gate the response, do not trigger rewrite, and do not flag for human
-review.
+1. **Similarity Lambda** (`lambda/`) — stateless, zip-packaged AWS Lambda.
+   Computes TF-IDF cosine + ROUGE-L scores between a drafted email and a
+   set of reference emails retrieved from the knowledge base. Returns a
+   ranked list of per-reference scores plus a deterministic `evidence`
+   block explaining the closest match (top TF-IDF shared terms, longest
+   contiguous shared phrase, originality ratio).
+
+2. **Similarity Evaluator agent** (`evaluator_agent/`) — Strands agent that
+   sits between the Reviewer and Serializer in the Copycraft pipeline. Calls
+   the Lambda (directly, not as a Strands tool — see
+   `evaluator_agent/README.md § Why no tool?` for why), then uses Nemotron 3
+   Super or GLM 5 via Bedrock to write a one-sentence *informational*
+   description of the similarity. Returns the full structured evaluation as
+   Pydantic (and therefore as JSON).
+
+Intended usage: the Strands pipeline invokes the evaluator agent after the
+Reviewer produces a final draft. The evaluator returns
+`SimilarityEvaluation` (ranked references + verdict + evidence +
+explanation) which the Serializer forwards to the UI. Scores are
+**informational only** — they surface alongside the draft so the
+copywriter can see how close their output sits to the retrieved sources.
+They do not gate the response, do not trigger rewrite, and do not flag
+for human review.
 
 See [`PLAN.md`](./PLAN.md) for the architecture rationale and
 [`SYNTHESIS.md`](./SYNTHESIS.md) for the full decision trail from the
@@ -24,48 +37,96 @@ email_comparison_similarity/
 ├── PLAN.md                       Architecture & design decisions
 ├── SYNTHESIS.md                  How we got here (decision trail)
 ├── README.md                     This file
-├── lambda/
-│   ├── handler.py                Lambda entry point, TF-IDF + ROUGE-L
-│   └── requirements.txt          scikit-learn, rouge-score
-├── infra/
-│   ├── app.py                    CDK entry point (pinned to eu-west-2)
+├── fixtures/                     Shared test emails, one source of truth
+│   ├── candidate.txt
+│   └── references/
+│       ├── id_1.txt
+│       ├── id_2.txt
+│       └── id_3.txt
+├── lambda/                       AWS Lambda — TF-IDF + ROUGE-L scoring
+│   ├── handler.py
+│   └── requirements.txt
+├── infra/                        CDK stack — eu-west-2, zip packaging
+│   ├── app.py
 │   ├── cdk.json
-│   ├── requirements.txt          aws-cdk-lib, constructs
-│   └── stacks/
-│       ├── __init__.py
-│       └── similarity_stack.py   Zip-packaged Function with bundling
-└── local_test/
-    ├── run_test.py               Fixtures-driven local runner
-    ├── requirements.txt          scikit-learn, rouge-score
-    ├── fixtures/                 Default smoke test (no near-duplicate)
-    │   ├── candidate.txt
-    │   └── references/
-    │       ├── id_1.txt
-    │       ├── id_2.txt
-    │       └── id_3.txt
-    └── fixtures_copycat/         Smoke test with one near-duplicate
-        ├── candidate.txt
-        └── references/
-            ├── copycat_source.txt
-            ├── roadmap.txt
-            └── vendor.txt
+│   ├── requirements.txt
+│   └── stacks/similarity_stack.py
+├── local_test/                   Lambda-only smoke test (no agent)
+│   ├── run_test.py
+│   └── requirements.txt
+└── evaluator_agent/              Strands agent — calls Lambda + LLM
+    ├── README.md                 Agent-specific docs
+    ├── agent.py                  evaluate_similarity() entry point
+    ├── config.py                 Model, region, prompt (Nemotron/GLM)
+    ├── schemas.py                Pydantic: SimilarityEvaluation
+    ├── similarity_client.py      Lambda invoker (local or live)
+    ├── run_local.py              JSON-only runner
+    └── requirements.txt
 ```
 
-## Prerequisites
+## Demo from a clean checkout
 
-- Python 3.12+
-- Docker (CDK bundles the zip inside a Lambda-compatible Linux
-  container to get the right compiled wheels for numpy/scipy)
-- AWS CLI configured with credentials for the target account
-- AWS CDK v2 CLI: `npm install -g aws-cdk`
-- CDK bootstrapped in the target account/region:
-  `cdk bootstrap aws://ACCOUNT/eu-west-2`
+There are two things you can run, and they answer different questions:
 
-## Local testing
+| Runner | Answers | What it exercises |
+|---|---|---|
+| `local_test/run_test.py` | "Are the scoring numbers right?" | Lambda handler alone, no agent |
+| `evaluator_agent/run_local.py` | "Does the agent produce the right JSON?" | Full pipeline: Lambda call + LLM (or mock) + Pydantic |
 
-The handler is importable directly from the repo — no container, no
-AWS, no Lambda runtime emulator. Everything runs in ~10 ms per call
-against hand-edited text fixtures.
+Most of the time you want the agent runner. The Lambda runner is there
+for when something looks wrong and you need to bisect *where*.
+
+### 1. Agent — mock mode (default, no AWS creds)
+
+Deterministic templated explanation. Good for fast iteration.
+
+```bash
+cd evaluator_agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r ../lambda/requirements.txt   # scikit-learn, rouge-score
+
+python run_local.py
+```
+
+Outputs valid JSON straight to stdout. Pipe it through `jq` if you like:
+
+```bash
+python run_local.py | jq .
+```
+
+### 2. Agent — live LLM (Bedrock Nemotron 3 Super in eu-west-2)
+
+Needs AWS creds with `bedrock:InvokeModel` for
+`nvidia.nemotron-super-3-120b` in `eu-west-2`. Still uses the Lambda
+in-process, so no Lambda deployment needed.
+
+```bash
+python run_local.py --live-llm
+```
+
+To compare the LLM against the deterministic mock explanation:
+
+```bash
+python run_local.py        | jq -r .explanation    # templated
+python run_local.py --live-llm | jq -r .explanation   # Nemotron
+```
+
+### 3. Agent — full live (Bedrock + deployed Lambda)
+
+Production shape. Needs `lambda:InvokeFunction` on
+`copycraft-similarity-handler` *and* Bedrock. Deploy the Lambda first
+(see § Deploy below).
+
+```bash
+python run_local.py --live-llm --live-lambda
+```
+
+### 4. Lambda only
+
+If the agent output looks wrong and you want to check whether the
+Lambda itself is to blame:
 
 ```bash
 cd local_test
@@ -73,68 +134,32 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Score the default fixture set (all unrelated references)
 python run_test.py
-
-# Score the copycat fixture set (one near-duplicate)
-python run_test.py --fixtures fixtures_copycat
-
-# Bring your own fixtures directory
-python run_test.py --fixtures /path/to/your/emails
-
-# Or bypass fixtures entirely and pass raw JSON
-python run_test.py --payload my_payload.json
 ```
 
-The fixtures layout is:
+This prints the raw Lambda response — no agent, no LLM, no JSON
+cleanup. Same fixtures, same candidate, same references.
 
-```
-<dir>/
-  candidate.txt                Draft email (stand-in for Writer output)
-  references/
-    <email_id>.txt             One file per source email;
-                                filename (sans .txt) = email_id
-```
+### Customising the fixtures
 
-Edit the text files in your normal editor — full multi-line emails,
-signatures, line breaks, whatever — and re-run `run_test.py`. No
-JSON escaping, no YAML, no config files.
+`fixtures/` is the single source of truth. Edit
+`fixtures/candidate.txt` and the files under `fixtures/references/` in
+your normal editor. Both runners pick up changes immediately — no JSON
+escaping, no config files.
 
-**Expected output shape:**
+Filename (sans `.txt`) in `references/` becomes the `email_id`.
 
-```
-Running handler (TF-IDF + ROUGE-L, should be sub-second)...
+## Prerequisites
 
-Status: 200
-Time:   0.01s
+- Python 3.12+
+- Docker (CDK bundles the Lambda zip inside a Lambda-compatible Linux
+  container to get the right compiled wheels for numpy/scipy)
+- AWS CLI configured with credentials for the target account
+- AWS CDK v2 CLI: `npm install -g aws-cdk`
+- CDK bootstrapped in the target account/region:
+  `cdk bootstrap aws://ACCOUNT/eu-west-2`
 
-Response body:
-{
-  "references": [
-    {
-      "email_id":      "copycat_source",
-      "rank":          1,
-      "similarity":    0.5321,
-      "rouge_l":       0.6381,
-      "tfidf_cosine":  0.5321,
-      "relative_share":0.8706
-    },
-    {...}, {...}
-  ],
-  "candidate_summary": {
-    "closest_match":      "copycat_source",
-    "closest_similarity": 0.5321,
-    "confidence":         "high"
-  }
-}
-```
-
-Unrelated references will sit in `similarity=0.01-0.05` with
-`confidence=low`. A near-duplicate will jump to `similarity>0.3` with
-`confidence=high` and typically >70% `relative_share`. See
-[`PLAN.md § 4`](./PLAN.md) for the full field-by-field schema.
-
-## Deploy
+## Deploy (Lambda)
 
 ```bash
 cd infra
@@ -148,10 +173,10 @@ cdk synth
 cdk deploy
 ```
 
-On success the stack outputs the Lambda function name and ARN.
-Build artefacts land in `infra/cdk.out/`.
+On success the stack outputs the Lambda function name and ARN. Build
+artefacts land in `infra/cdk.out/`.
 
-## Invoke
+## Invoke the Lambda directly
 
 ```bash
 aws lambda invoke \
@@ -169,58 +194,48 @@ aws lambda invoke \
   response.json && cat response.json
 ```
 
-From the Strands agent service (Python):
-
-```python
-import json
-import boto3
-
-lambda_client = boto3.client("lambda", region_name="eu-west-2")
-
-resp = lambda_client.invoke(
-    FunctionName="copycraft-similarity-handler",
-    InvocationType="RequestResponse",
-    Payload=json.dumps({
-        "candidate": draft_text,
-        "references": source_emails,
-    }).encode(),
-)
-
-body = json.loads(resp["Payload"].read())
-scores = json.loads(body["body"])
-# scores["references"] is already ranked
-# scores["candidate_summary"]["closest_match"] is the top email_id
-# scores["candidate_summary"]["confidence"] is "high" | "medium" | "low"
-```
+From the Strands agent layer, you'd use the evaluator agent rather
+than raw Lambda invocation — see `evaluator_agent/README.md`.
 
 ## Cost
 
 At rest: **$0** (no provisioned concurrency, no always-on
 infrastructure, no ECR repo).
 
-Per invocation (warm, 3 references): ~$0.000002 at 512 MB × 50 ms.
+Per invocation:
 
-| Usage | Monthly cost |
+- Lambda (warm, 3 references): ~$0.000002 at 512 MB × 50 ms.
+- Bedrock (Nemotron 3 Super, ≤128 output tokens): ~$0.0001.
+
+| Usage | Monthly cost (Lambda + Bedrock) |
 |---|---|
-| 100 invocations | ~$0.000005 |
-| 1,000 invocations | ~$0.00005 |
-| 10,000 invocations | ~$0.0005 |
+| 100 invocations | ~$0.01 |
+| 1,000 invocations | ~$0.10 |
+| 10,000 invocations | ~$1.00 |
 
-Roughly **100× cheaper** than the BERTScore container the service
-previously ran on. See [`SYNTHESIS.md`](./SYNTHESIS.md) for the full
-cost comparison and why we switched.
+The agent layer is the cost driver, not the Lambda. If you skip the
+LLM explanation (use mock mode) the cost collapses back to ~$0.00005
+per 1k invocations.
+
+See [`SYNTHESIS.md`](./SYNTHESIS.md) for the full cost comparison
+against the BERTScore container design this replaced.
 
 ## Tuning
 
-The handler is deliberately parameter-free — no env vars, no runtime
-config. If you want to change something, it's a code change:
+Neither component has runtime config (no env vars). Tuning is a code
+change by design:
 
 | What | Where |
 |---|---|
-| Confidence gap thresholds (high=0.15, medium=0.05) | `handler.py` → `_CONFIDENCE_HIGH_GAP`, `_CONFIDENCE_MEDIUM_GAP` |
-| TF-IDF n-gram range, stopwords, tokeniser | `handler.py` → `_tfidf_cosine()` |
-| Lambda memory/timeout | `infra/stacks/similarity_stack.py` → `memory_size`, `timeout` |
+| Confidence gap thresholds | `lambda/handler.py` → `_CONFIDENCE_HIGH_GAP`, `_CONFIDENCE_MEDIUM_GAP` |
+| Verdict thresholds | `lambda/handler.py` → `_VERDICT_NEAR_DUPLICATE`, `_VERDICT_RELATED` |
+| TF-IDF n-gram range, stopwords, tokeniser | `lambda/handler.py` → `_tfidf_cosine()` |
+| Lambda memory/timeout | `infra/stacks/similarity_stack.py` |
+| Evaluator LLM model | `evaluator_agent/config.py` → `EVALUATOR_MODEL_ID` (swap `nvidia.nemotron-super-3-120b` ↔ `zai.glm-5`) |
+| System prompt | `evaluator_agent/config.py` → `EVALUATOR_SYSTEM_PROMPT` |
+| Mock boilerplate detector | `evaluator_agent/agent.py` → `_BOILERPLATE_TERMS` |
 
-After changing any of these, re-run `local_test/run_test.py` against
-both fixture sets before deploying to sanity-check the scores still
-behave.
+After changing any Lambda-side parameter, re-run `local_test/run_test.py`
+to sanity-check the scores. After changing any agent-side parameter,
+re-run `evaluator_agent/run_local.py` (mock *and* `--live-llm`) to
+confirm both explanations still read right.

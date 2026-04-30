@@ -1,0 +1,13 @@
+# Similarity Evaluator agent — runtime dependencies.
+#
+# Kept deliberately lean so the agent can be imported and invoked
+# from whatever orchestrator owns the Strands pipeline without
+# dragging in unrelated deps.
+#
+# NOTE: these must never be added to the Lambda's requirements.txt —
+# boto3 ships in the Lambda runtime by default (no need to vendor it),
+# and strands-agents has no business inside the scoring zip.
+
+strands-agents>=0.1.0
+boto3>=1.34.0
+pydantic>=2.7.0
