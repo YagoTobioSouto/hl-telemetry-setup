@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CDK entry point for the BERTScore similarity stack.
+"""CDK entry point for the TF-IDF + ROUGE-L similarity stack.
 
 Pinned to eu-west-2 to align with the rest of the Copycraft deployment.
 Account is resolved from CDK_DEFAULT_ACCOUNT which the CDK CLI injects

@@ -6,34 +6,32 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     Strands Agents Service                           │
 │                                                                      │
-│   Researcher Agent ──► Writer Agent ──► similarity_tool()            │
-│        │                    │                 │                      │
-│        ▼                    │                 ▼                      │
-│    S3 Vectors KB            │          ┌─────────────┐               │
-│    (top k emails)           │          │ lambda:     │               │
-│                             │          │ Invoke      │               │
-│                             │          │ (SigV4/IAM) │               │
-│                             │          └──────┬──────┘               │
-│                             │                 │                      │
-└─────────────────────────────┼─────────────────┼──────────────────────┘
-                              │                 │
-                              │                 ▼
-                              │      ┌──────────────────────┐
-                              │      │ Similarity Lambda     │
-                              │      │ (zip, Python 3.12)   │
-                              │      │                      │
-                              │      │  TF-IDF (sklearn)    │
-                              │      │  ROUGE-L (rouge-score)│
-                              │      │                      │
-                              │      │  512 MB, 10s timeout │
-                              │      │  ~50ms warm          │
-                              │      │  ~1s cold            │
-                              │      └──────────────────────┘
-                              │
-                              ▼
-                  UI surfaces similarity scores
-                  alongside the draft for the user
-                  (informational only — no gating)
+│   Researcher ─► Copywriter ─► Editor ─► Reviewer ─► Evaluator ─►     │
+│      │                                                │     Serializer│
+│      ▼                                                ▼              │
+│   S3 Vectors KB                                 evaluate_similarity()│
+│   (top 3 emails)                                      │              │
+│                                                       │ boto3        │
+│                                                       ▼ lambda:Invoke│
+│                                              ┌─────────────────────┐│
+│                                              │ Similarity Lambda   ││
+│                                              │ (zip, Python 3.12)  ││
+│                                              │                     ││
+│                                              │  TF-IDF (sklearn)   ││
+│                                              │  ROUGE-L            ││
+│                                              │  + verdict/evidence ││
+│                                              │                     ││
+│                                              │  512 MB, 10s timeout││
+│                                              │  ~50ms warm         ││
+│                                              │  ~1s cold           ││
+│                                              └─────────────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+                                                        │
+                                                        ▼
+                                             SimilarityEvaluation JSON
+                                             (references + verdict +
+                                              evidence + explanation)
+                                             ──► UI
 ```
 
 ### Components
@@ -42,11 +40,14 @@
 |---|---|---|
 | Strands Agents Service | AgentCore Runtime | Hosts the multi-agent pipeline |
 | S3 Vectors KB | Amazon S3 Vectors | Stores email embeddings; Researcher retrieves top k |
-| Similarity Lambda | AWS Lambda (zip, Python 3.12) | Computes per-reference TF-IDF + ROUGE-L + summary |
+| Similarity Evaluator agent | Strands agent (Python module) | Sits between Reviewer and Serializer; calls the Lambda and a Bedrock LLM to produce `SimilarityEvaluation` |
+| Similarity Lambda | AWS Lambda (zip, Python 3.12) | Deterministic scoring: per-reference TF-IDF + ROUGE-L + verdict + evidence |
+| Bedrock (Nemotron 3 Super or GLM 5) | Amazon Bedrock | Writes the one-sentence `explanation` inside the Evaluator agent |
 
 The Lambda is stateless, has no VPC attachment, no persistence, no
 environment variables, and no external dependencies beyond standard
-AWS Lambda runtime.
+AWS Lambda runtime. The Evaluator agent runs inside the Strands
+orchestrator's process — it is not a separately-deployed service.
 
 ---
 
@@ -56,18 +57,24 @@ AWS Lambda runtime.
 1. User submits query
          │
          ▼
-2. Researcher Agent ──► S3 Vectors ──► [{email_id, text}, ...]
+2. Researcher ──► S3 Vectors ──► [{email_id, text}, ...]  (top 3)
          │
          ▼
-3. Writer Agent (may run 2–3 internal refinement passes)
-         │
+3. Copywriter ──► Editor ──► Reviewer
+         │           (refinement passes within this triad)
          ▼  final_draft_text
-4. similarity_tool()     ──► Lambda ──► scores + summary
+4. Evaluator agent: evaluate_similarity(draft, sources)
          │
-         ▼
-5. UI renders draft + similarity panel:
-     "Your draft is 87% aligned with [id_1]
-      (high confidence match)."
+         ├──► invoke_similarity_lambda()   # plain function call
+         │        └─ Lambda computes scores + verdict + evidence
+         │
+         ├──► Bedrock (Nemotron/GLM) writes 1-sentence explanation
+         │
+         └──► assembles SimilarityEvaluation (Pydantic)
+                   │
+                   ▼
+5. Serializer forwards SimilarityEvaluation JSON to the UI:
+     references[] + verdict + confidence + evidence + explanation
 ```
 
 ### Step-by-step
@@ -75,25 +82,36 @@ AWS Lambda runtime.
 1. **User submits a query** (e.g. "Draft a Q3 pricing follow-up").
 
 2. **Researcher Agent** invokes the S3 Vectors retrieval tool.
-   It returns the top k most similar emails, each with an
-   ``email_id`` and ``text``. The agent passes these downstream.
+   It returns the top 3 most similar emails, each with an
+   ``email_id`` and ``text``. These are passed downstream.
 
-3. **Writer Agent** receives the source emails as context plus the
-   user query. It drafts a new email, potentially running 2–3
-   internal refinement passes. Output: ``final_draft_text``.
+3. **Copywriter → Editor → Reviewer triad** receives the source
+   emails plus the user query. The Copywriter drafts, the Editor
+   refines, and the Reviewer checks against the editorial
+   guidelines, potentially sending the draft back for another
+   pass. Final output: ``final_draft_text``.
 
-4. **similarity_tool** (a Strands ``@tool`` function, not a full
-   agent) takes the draft and the source emails and makes a
-   SigV4-signed ``lambda:Invoke`` call. The Lambda computes per-
-   reference TF-IDF cosine + ROUGE-L, ranks them, and adds a
-   summary block identifying the closest match and how confident
-   that assessment is.
+4. **Evaluator agent** is invoked exactly once, after the
+   Reviewer's final draft. Its entry point is
+   ``evaluate_similarity(draft, sources)`` in
+   ``evaluator_agent/agent.py``. It:
+   1. Calls the Lambda in plain Python (not a Strands tool — see
+      §7 for why) to get deterministic scores + evidence.
+   2. Calls Bedrock once with the scoring output inlined in the
+      prompt, asking for a one-sentence informational
+      description of the relationship.
+   3. Assembles a typed ``SimilarityEvaluation`` Pydantic that
+      passes the deterministic fields through unchanged and adds
+      only the LLM-generated ``explanation`` string.
 
-5. **UI** surfaces the scores to the user, alongside the generated
-   draft. The score is **informational**: it tells the user how
-   similar their draft looks to the source emails that were
-   retrieved. The pipeline does not gate on it, does not rewrite
-   based on it, and does not flag it for human review.
+5. **Serializer** receives the ``SimilarityEvaluation``, serialises
+   it to JSON, and forwards it to the UI alongside the draft.
+   The UI renders the ``explanation`` as the headline and exposes
+   ``references[]`` / ``evidence`` in an expandable detail view.
+
+The score is **informational**: it tells the user how similar their
+draft looks to the source emails. The pipeline does not gate on it,
+does not rewrite based on it, and does not flag it for human review.
 
 ---
 
@@ -472,60 +490,103 @@ developer machines don't randomly fail on ``docker pull``.
 
 ## 7. Integration with Strands Agents
 
-### Tool definition
+### The Evaluator agent entry point
+
+The similarity Lambda is not exposed to the orchestrator directly.
+It is wrapped by the Similarity Evaluator agent
+(``evaluator_agent/``), which is the single public API for this
+capability:
 
 ```python
-import json
-import boto3
-from strands import tool
+from evaluator_agent.agent import evaluate_similarity
+from evaluator_agent.schemas import SimilarityEvaluation
 
-_lambda = boto3.client("lambda", region_name="eu-west-2")
+# After the Reviewer has produced its final draft:
+evaluation: SimilarityEvaluation = evaluate_similarity(
+    draft_email=final_draft_text,
+    source_emails=researcher_output,   # [{"email_id": ..., "text": ...}]
+    llm="live",                        # "mock" for offline / CI runs
+    lambda_mode="live",                # "local" to run the handler in-process
+)
 
-@tool
-def compute_similarity(draft_email: str, source_emails: list[dict]) -> dict:
-    """Score how similar a draft email is to each source email.
-
-    Args:
-        draft_email: The final draft produced by the Writer agent.
-        source_emails: [{email_id, text}, ...] from S3 Vectors retrieval.
-
-    Returns:
-        {
-          "references": [...],         # ranked per-reference scores
-          "candidate_summary": {...},   # closest match + confidence
-        }
-    """
-    resp = _lambda.invoke(
-        FunctionName="copycraft-similarity-handler",
-        InvocationType="RequestResponse",
-        Payload=json.dumps({
-            "candidate": draft_email,
-            "references": source_emails,
-        }).encode(),
-    )
-    body = json.loads(resp["Payload"].read())
-    return json.loads(body["body"])
+# evaluation is a typed Pydantic model with:
+#   - references: list[Reference]      full ranked scores for all sources
+#   - verdict, confidence              deterministic from the Lambda
+#   - evidence                         shared terms / phrase / originality ratio
+#   - explanation                      one informational sentence
+serializer_payload = evaluation.model_dump()
 ```
 
-### When it triggers
+Internally, ``evaluate_similarity`` does three things in sequence:
 
-The tool is invoked **once per pipeline execution, after the Writer
-has produced its final draft**. Never during intermediate Writer
-refinement passes. The Strands orchestrator controls the sequencing:
+1. Calls the Lambda (``invoke_similarity_lambda``) to get the
+   deterministic scoring output.
+2. Calls Bedrock once with the scoring dict inlined in the prompt,
+   with ``structured_output_model=ExplanationOnly`` so the model
+   can only return the single ``explanation`` string.
+3. Assembles the full ``SimilarityEvaluation`` from the Lambda's
+   deterministic fields and the LLM's explanation.
+
+### Why the Lambda is NOT a Strands ``@tool``
+
+An earlier design registered the Lambda as a Strands ``@tool`` that
+the LLM could call. That pattern broke in practice: the model
+(Nemotron 3 Super) entered infinite tool-call loops — 30+
+invocations per request — instead of producing the final structured
+output. NVIDIA's own Nemotron documentation flags tool-call loop
+failures as one of its two dominant failure modes, and combining
+tools with ``structured_output`` amplifies it.
+
+The deeper reason to avoid ``@tool`` here is architectural: **the
+Lambda call is not a decision the LLM needs to reason about**. It
+happens exactly once per evaluation, unconditionally, with known
+inputs. Making it a tool lets the LLM second-guess a step that
+isn't a choice. Calling it in plain Python and feeding the result
+into the prompt removes the failure mode entirely and is faster.
+
+The same reasoning applies to other deterministic preprocessing
+steps. A good rule of thumb: if you know in advance that a call
+will happen exactly once and what its inputs will be, don't make
+it a tool.
+
+### When the Evaluator is invoked
 
 ```python
 # 1. Researcher retrieves source emails
 source_emails = researcher(user_query)
 
-# 2. Writer drafts (may iterate internally)
-draft = writer(source_emails, user_query)
+# 2. Copywriter/Editor/Reviewer produce the final draft
+draft = reviewer(editor(copywriter(source_emails, user_query)))
 
-# 3. Similarity score (single call, after final draft)
-scores = compute_similarity(draft_email=draft.text, source_emails=source_emails)
+# 3. Similarity evaluation — single call, after the final draft
+evaluation = evaluate_similarity(
+    draft_email=draft.text,
+    source_emails=source_emails,
+    llm="live",
+    lambda_mode="live",
+)
 
-# 4. Response returned to the caller with scores attached
-return {"draft": draft.text, "similarity": scores}
+# 4. Serializer forwards both to the UI
+return {"draft": draft.text, "similarity": evaluation.model_dump()}
 ```
+
+The Evaluator runs exactly once per pipeline execution, after the
+Reviewer's final output. It does not run on intermediate
+refinement passes.
+
+### Degraded-mode behaviour
+
+If Bedrock is unavailable, set ``llm="mock"`` and the Evaluator
+will return a deterministic templated explanation that mirrors the
+three verdict branches of the live prompt. The rest of the
+``SimilarityEvaluation`` is unchanged. The Serializer needs no
+code changes — the response shape is identical.
+
+If the Lambda invocation fails, ``evaluate_similarity`` raises a
+``RuntimeError``. The orchestrator should catch this and attach
+``similarity_status: "unavailable"`` to the response rather than
+propagating the error to the user. Similarity scoring is
+informational and must not block the draft.
 
 ---
 
